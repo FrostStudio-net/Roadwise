@@ -8,7 +8,11 @@ import BottomNav from "@/components/BottomNav";
 import DataAttribution from "@/components/DataAttribution";
 import VehicleSelector from "@/components/VehicleSelector";
 import { storeRouteAnalysis } from "@/lib/route-analysis-storage";
-import type { AnalyseRouteResponse, RouteWarning, VehicleType } from "@/types/analysis";
+import type { AnalyseRouteResponse, AnalysisDebugRecord, RouteWarning, VehicleType } from "@/types/analysis";
+
+type AnalyseErrorResponse = {
+  error?: { message?: string };
+};
 
 export default function CheckPage() {
   return <Suspense fallback={<CheckLoading />}><CheckContent /></Suspense>;
@@ -22,7 +26,7 @@ function CheckContent() {
   const [vehicle, setVehicle] = useState<VehicleType>(initialVehicle);
   const [result, setResult] = useState<AnalyseRouteResponse>();
   const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
+  const [requestError, setRequestError] = useState<string>();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -33,17 +37,22 @@ function CheckContent() {
       signal: controller.signal,
     })
       .then(async (response) => {
-        if (!response.ok) throw new Error("Analysis request failed");
-        return response.json() as Promise<AnalyseRouteResponse>;
+        const data = await response.json() as AnalyseRouteResponse | AnalyseErrorResponse;
+        if (!response.ok) {
+          const failure = data as AnalyseErrorResponse;
+          throw new Error(failure.error?.message ?? "Route analysis is currently unavailable");
+        }
+        return data as AnalyseRouteResponse;
       })
       .then((data) => {
         setResult(data);
+        setRequestError(undefined);
         storeRouteAnalysis(data);
       })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === "AbortError") return;
         setResult(undefined);
-        setFailed(true);
+        setRequestError(error instanceof Error ? error.message : "Route analysis is currently unavailable");
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -53,7 +62,7 @@ function CheckContent() {
 
   const route = result?.route;
   const analysis = result?.analysis;
-  const unavailable = failed || (analysis && !analysis.available);
+  const roadDataUnavailable = analysis && !analysis.available;
 
   return (
     <>
@@ -73,7 +82,11 @@ function CheckContent() {
           <section className="glass card section-block flex min-h-52 items-center justify-center p-6 text-center">
             <div><span className="breathing mx-auto block h-2 w-2 rounded-full bg-[#d48c6b]" /><h2 className="mt-4 text-[18px] font-semibold">Checking your route...</h2><p className="mt-2 text-[12px] text-[#8e9b98]">Reading official road and weather sources</p></div>
           </section>
-        ) : unavailable || !analysis ? (
+        ) : requestError || !analysis ? (
+          <section className="glass card section-block p-6">
+            <CloudOff size={27} className="text-[#d48c6b]" /><h2 className="mt-4 text-[21px] font-semibold text-[#e8c4b0]">Route check unavailable</h2><p className="mt-3 text-[13px] leading-6 text-[#a5afac]">{requestError ?? "Route analysis is currently unavailable. Please try again."}</p>
+          </section>
+        ) : roadDataUnavailable ? (
           <section className="glass card section-block p-6">
             <CloudOff size={27} className="text-[#d48c6b]" /><h2 className="mt-4 text-[21px] font-semibold text-[#e8c4b0]">Live data unavailable</h2><p className="mt-3 text-[13px] leading-6 text-[#a5afac]">Live road data is currently unavailable. Check Umferðin and official sources before driving.</p>
           </section>
@@ -89,12 +102,14 @@ function CheckContent() {
               {analysis.warnings.length > 0 ? analysis.warnings.map((warning) => <HazardCard key={warning.id} warning={warning} />) : <div className="px-2 py-4 text-[12px] leading-5 text-[#9aa6a2]">No significant route hazards were reported by the available official sources. Conditions can change.</div>}
             </div></section>
 
-            <section className="surface-panel section-block flex items-center gap-3 border-[#34d399]/10 bg-[#34d399]/[0.035] p-4"><span className="breathing h-2 w-2 shrink-0 rounded-full bg-[#34d399]" /><div><div className="text-[10px] uppercase tracking-[.14em] text-[#70cba7]">Source freshness</div><div className="mt-1 text-[12px] text-[#a8b2af]">{result.sources.updatedAt ? `Updated ${formatTimestamp(result.sources.updatedAt)}` : "Live sources checked; update time unavailable"}</div></div></section>
+            <section className="surface-panel section-block flex items-center gap-3 border-[#34d399]/10 bg-[#34d399]/[0.035] p-4"><span className="breathing h-2 w-2 shrink-0 rounded-full bg-[#34d399]" /><div><div className="text-[10px] uppercase tracking-[.14em] text-[#70cba7]">Source freshness</div><div className="mt-1 text-[12px] text-[#a8b2af]">{formatRoadDataFreshness(result)}</div>{result.sources.roadDataStale && <div className="mt-1 text-[10px] text-[#d48c6b]">Road data may be stale. Confirm with official sources.</div>}</div></section>
+            {!result.sources.imo.available && <div className="section-block px-1 text-[11px] leading-5 text-[#8e9b98]">Weather warning data temporarily unavailable.</div>}
+            {process.env.NODE_ENV === "development" && result.debug && <WhyResult analysis={analysis} records={result.debug.matchedRecords} />}
           </>
         )}
 
         {route && <div className="action-stack"><button onClick={() => router.push("/drive")} className="primary-button">Open drive mode <ArrowUpRight size={19} /></button><button onClick={() => openMaps(route.origin.name, route.destination.name)} className="glass flex w-full items-center justify-center gap-2 rounded-[22px] px-5 py-[15px] text-[13px] text-[#c2cac7]"><Navigation size={16} className="text-[#d48c6b]" />Open in Maps</button></div>}
-        <div className="section-block"><VehicleSelector vehicle={vehicle} onChange={(value) => { setLoading(true); setFailed(false); setVehicle(value); }} /></div>
+        <div className="section-block"><VehicleSelector vehicle={vehicle} onChange={(value) => { setLoading(true); setRequestError(undefined); setVehicle(value); }} /></div>
         <DataAttribution includeImo />
       </main><BottomNav />
     </>
@@ -119,6 +134,32 @@ function formatDuration(minutes: number): string {
 
 function formatTimestamp(value: string): string {
   return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Atlantic/Reykjavik" }).format(new Date(value));
+}
+
+function formatRoadDataFreshness(result: AnalyseRouteResponse): string {
+  const minutes = result.sources.roadDataAgeMinutes;
+  if (minutes !== undefined) {
+    if (minutes < 1) return "Road data updated just now";
+    if (minutes < 60) return `Road data updated ${minutes} min ago`;
+    const hours = Math.floor(minutes / 60);
+    return `Road data updated ${hours} hr ${minutes % 60} min ago`;
+  }
+  return result.sources.roadDataUpdatedAt
+    ? `Road data updated ${formatTimestamp(result.sources.roadDataUpdatedAt)}`
+    : "Road data checked; update time unavailable";
+}
+
+function WhyResult({ analysis, records }: { analysis: AnalyseRouteResponse["analysis"]; records: AnalysisDebugRecord[] }) {
+  const triggers = analysis.warnings.filter((warning) => warning.affectsOverallLevel);
+  return <details className="surface-panel section-block p-4 text-[11px] text-[#9aa6a2]"><summary className="cursor-pointer text-[12px] font-semibold text-[#c2cac7]">Why this result?</summary><div className="mt-4 space-y-4"><div><div className="eyebrow">Overall: {analysis.level.toUpperCase()}</div><div className="mt-2">Triggered by:</div>{triggers.length > 0 ? triggers.map((warning) => <DebugTrigger key={warning.id} warning={warning} />) : <div className="mt-1">No relevant hazard</div>}</div><div className="eyebrow pt-2">All matched road records</div>{records.map((record) => <DebugRecord key={`${record.kind}-${record.sourceRecordId}`} record={record} />)}</div></details>;
+}
+
+function DebugTrigger({ warning }: { warning: RouteWarning }) {
+  return <div className="mt-2 border-l border-[#d48c6b]/20 pl-3 leading-5"><div className="font-semibold text-[#d6ddda]">{warning.title}: {warning.officialCondition ?? warning.type}</div><div>Road: {[warning.roadNumber, warning.roadName].filter(Boolean).join(" · ") || "Not supplied"}</div>{warning.matchedSectionId && <div>Section: {warning.matchedSectionId}</div>}<div>Distance from selected route: {warning.distanceFromRouteMeters !== undefined ? `${warning.distanceFromRouteMeters} m` : "Unknown"}</div><div>Source: {warning.source}</div><div>Record ID: {warning.sourceRecordId ?? warning.id}</div>{warning.updatedAt && <div>Updated: {formatTimestamp(warning.updatedAt)}</div>}</div>;
+}
+
+function DebugRecord({ record }: { record: AnalysisDebugRecord }) {
+  return <div className="border-t border-white/[.06] pt-3"><div className="font-semibold text-[#d6ddda]">{record.title} · {record.type}</div><div className="mt-2 space-y-1 leading-5"><div>Official status: {record.officialStatus}</div><div>Road/location: {[record.roadNumber, record.roadName].filter(Boolean).join(" · ") || "Not supplied"}</div><div>Distance from route: {record.distanceFromRouteMeters !== undefined ? `${record.distanceFromRouteMeters} m` : "Unknown"}</div><div>Distance ahead: {record.distanceAheadKm !== undefined ? `${record.distanceAheadKm.toFixed(1)} km` : "Unknown"}</div><div>Source: {record.source}</div><div>Record ID: {record.sourceRecordId}</div>{record.matchedSectionId && <div>Section: {record.matchedSectionId}</div>}{record.officialComment && <div>Official comment: {record.officialComment}</div>}{record.updatedAt && <div>Updated: {formatTimestamp(record.updatedAt)}</div>}</div></div>;
 }
 
 function openMaps(origin: string, destination: string): void {

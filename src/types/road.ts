@@ -15,6 +15,16 @@ export type GeoJsonMultiLineString = {
   coordinates: Coordinates[][];
 };
 
+export type MatchedLinearGeometry = GeoJsonLineString | GeoJsonMultiLineString;
+
+export type RouteMatchEvidence = {
+  distanceFromRouteMeters: number;
+  distanceAheadKm: number;
+  matchedGeometry?: MatchedLinearGeometry;
+  overlapLengthMeters?: number;
+  criticalMatch: boolean;
+};
+
 export type RoadConditionState =
   | "normal"
   | "slippery"
@@ -52,7 +62,8 @@ export type RoadSection = {
   id: string;
   name?: string;
   roadNumbers: string[];
-  geometry?: GeoJsonLineString | GeoJsonMultiLineString;
+  geometry?: MatchedLinearGeometry;
+  geometrySource?: "gmlEpsg3057" | "openlr";
 };
 
 export type RoadCondition = {
@@ -64,6 +75,8 @@ export type RoadCondition = {
   validFrom?: string;
   validTo?: string;
   updatedAt?: string;
+  sourceType?: string;
+  routeMatch?: RouteMatchEvidence;
 };
 
 export type RoadIncident = {
@@ -75,6 +88,11 @@ export type RoadIncident = {
   validFrom?: string;
   validTo?: string;
   updatedAt?: string;
+  sourceType?: string;
+  roadNumber?: string;
+  roadName?: string;
+  geometry?: MatchedLinearGeometry;
+  routeMatch?: RouteMatchEvidence;
   distanceAheadKm?: number;
 };
 
@@ -103,6 +121,7 @@ export type MeasurementSite = {
 
 export type RoadsideMeasurement = MeasurementSite & {
   observedAt?: string;
+  distanceFromRouteMeters?: number;
   distanceAheadKm?: number;
   values: MeasurementValues;
 };

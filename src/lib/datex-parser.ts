@@ -1,10 +1,14 @@
 import { XMLParser } from "fast-xml-parser";
+import { lineString } from "@turf/helpers";
+import simplify from "@turf/simplify";
+import proj4 from "proj4";
 
 import type {
   Coordinates,
   IncidentType,
   MeasurementSite,
   MeasurementValues,
+  MatchedLinearGeometry,
   RoadCondition,
   RoadConditionState,
   RoadIncident,
@@ -26,6 +30,9 @@ const parser = new XMLParser({
   parseTagValue: true,
   trimValues: true,
 });
+
+const EPSG_3057 = "+proj=lcc +lat_0=65 +lon_0=-19 +lat_1=64.25 +lat_2=65.75 +x_0=500000 +y_0=500000 +ellps=GRS80 +units=m +no_defs +type=crs";
+const WGS_84 = "+proj=longlat +datum=WGS84 +no_defs +type=crs";
 
 function asRecord(value: unknown): UnknownRecord | undefined {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -63,6 +70,24 @@ function getPath(value: unknown, ...path: string[]): unknown {
     current = record[key];
   }
   return current;
+}
+
+function findFirst(value: unknown, key: string): unknown {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findFirst(item, key);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  }
+  const record = asRecord(value);
+  if (!record) return undefined;
+  if (key in record) return record[key];
+  for (const item of Object.values(record)) {
+    const found = findFirst(item, key);
+    if (found !== undefined) return found;
+  }
+  return undefined;
 }
 
 function payloadFromXml(xml: string): UnknownRecord {
@@ -177,6 +202,7 @@ export function parseRoadConditions(xml: string): ParsedPublication<RoadConditio
         locationId: asString(getPath(record, "locationReference", "predefinedLocationReference", "@_id")),
         ...dates,
         updatedAt: validIsoDate(record.situationRecordVersionTime),
+        sourceType: asString(record["@_type"]),
       });
     }
   }
@@ -265,14 +291,19 @@ export function parseIncidents(xml: string): ParsedPublication<RoadIncident[]> {
       if (!id) continue;
       const type = incidentType(record);
       const dates = validity(record);
+      const locationReference = record.locationReference;
       data.push({
         id,
         type,
         title: titleForIncident(type),
         description: localizedText(record.generalPublicComment),
         coordinates: incidentCoordinates(record),
+        geometry: geometryFromLocation(locationReference),
         ...dates,
         updatedAt: validIsoDate(record.situationRecordVersionTime),
+        sourceType: asString(record["@_type"]),
+        roadNumber: asString(findFirst(locationReference, "roadNumber")),
+        roadName: localizedText(findFirst(locationReference, "locationDescription")),
       });
     }
   }
@@ -280,7 +311,8 @@ export function parseIncidents(xml: string): ParsedPublication<RoadIncident[]> {
 }
 
 function openLrCoordinates(linearLocation: unknown): Coordinates[] {
-  const firstDirection = getPath(linearLocation, "openlrLinear", "firstDirection");
+  const openlrLinear = findFirst(linearLocation, "openlrLinear");
+  const firstDirection = getPath(openlrLinear, "firstDirection");
   const points = asArray(getPath(firstDirection, "openlrLocationReferencePoint"))
     .map((point) => coordinatesFrom(getPath(point, "openlrCoordinates")))
     .filter((point): point is Coordinates => Boolean(point));
@@ -289,8 +321,33 @@ function openLrCoordinates(linearLocation: unknown): Coordinates[] {
   return points;
 }
 
+function gmlCoordinates(linearLocation: unknown): Coordinates[] {
+  const gml = asRecord(findFirst(linearLocation, "gmlLineString"));
+  const posList = asString(gml?.posList);
+  const srsName = asString(gml?.["@_srsName"]);
+  if (!posList || !srsName?.includes("3057")) return [];
+  const values = posList.split(/\s+/).map(Number);
+  if (values.length < 4 || values.some((value) => !Number.isFinite(value))) return [];
+  const projected: Coordinates[] = [];
+  for (let index = 0; index + 1 < values.length; index += 2) {
+    const result = proj4(EPSG_3057, WGS_84, [values[index], values[index + 1]]);
+    projected.push([result[0], result[1]]);
+  }
+  if (projected.length < 3) return projected;
+  return simplify(lineString(projected), { tolerance: 0.000025, highQuality: true }).geometry.coordinates as Coordinates[];
+}
+
 function roadNumberFrom(location: unknown): string | undefined {
   return asString(getPath(location, "supplementaryPositionalDescription", "roadInformation", "roadNumber"));
+}
+
+function geometryFromLocation(location: unknown): MatchedLinearGeometry | undefined {
+  const locations = asArray(location);
+  const gmlLines = locations.map(gmlCoordinates).filter((line) => line.length >= 2);
+  const openLrLines = locations.map(openLrCoordinates).filter((line) => line.length >= 2);
+  const lines = gmlLines.length > 0 ? gmlLines : openLrLines;
+  if (lines.length === 1) return { type: "LineString", coordinates: lines[0] };
+  return lines.length > 1 ? { type: "MultiLineString", coordinates: lines } : undefined;
 }
 
 export function parsePredefinedLocations(xml: string): ParsedPublication<RoadSection[]> {
@@ -305,9 +362,13 @@ export function parsePredefinedLocations(xml: string): ParsedPublication<RoadSec
     const locations = isGroup
       ? asArray(getPath(reference, "locationGroup", "locationContainedInGroup"))
       : asArray(reference.location);
-    const lines = locations
+    const gmlLines = locations
+      .map(gmlCoordinates)
+      .filter((coordinates) => coordinates.length >= 2);
+    const openLrLines = locations
       .map(openLrCoordinates)
       .filter((coordinates) => coordinates.length >= 2);
+    const lines = gmlLines.length > 0 ? gmlLines : openLrLines;
     const roadNumbers = [...new Set(locations.map(roadNumberFrom).filter((value): value is string => Boolean(value)))];
     const name = localizedText(reference.predefinedLocationName)
       ?? localizedText(reference.predefinedLocationGroupName)
@@ -316,6 +377,7 @@ export function parsePredefinedLocations(xml: string): ParsedPublication<RoadSec
       id,
       name,
       roadNumbers,
+      geometrySource: gmlLines.length > 0 ? "gmlEpsg3057" : lines.length > 0 ? "openlr" : undefined,
       geometry: lines.length === 1
         ? { type: "LineString", coordinates: lines[0] }
         : lines.length > 1

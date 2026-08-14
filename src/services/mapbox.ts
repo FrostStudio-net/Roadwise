@@ -1,10 +1,12 @@
 import { ServiceError } from "@/services/http";
+import { developmentError } from "@/lib/server-log";
 import type { GeocodedPlace, MapboxRoute } from "@/types/analysis";
 import type { Coordinates } from "@/types/road";
 
 const ICELAND_BBOX = "-24.7,63.1,-13.0,66.7";
 
 type UnknownRecord = Record<string, unknown>;
+type RankedGeocodedPlace = GeocodedPlace & { rank: number };
 
 function getToken(): string {
   const token = process.env.MAPBOX_ACCESS_TOKEN;
@@ -35,7 +37,8 @@ async function mapboxJson(url: URL): Promise<unknown> {
   let response: Response;
   try {
     response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(15_000) });
-  } catch {
+  } catch (error) {
+    developmentError("mapbox", error);
     throw new ServiceError("Mapbox could not be reached", "MAPBOX_UNAVAILABLE");
   }
   if (!response.ok) {
@@ -44,27 +47,88 @@ async function mapboxJson(url: URL): Promise<unknown> {
   return response.json() as Promise<unknown>;
 }
 
+function normalized(value: string): string {
+  return value.normalize("NFC").toLocaleLowerCase("is").trim();
+}
+
+function contextItems(value: unknown): GeocodedPlace["context"] {
+  const data = record(value);
+  if (!data) return [];
+  return Object.entries(data).flatMap(([type, raw]) => {
+    const item = record(raw);
+    const name = text(item?.name);
+    if (!name) return [];
+    return [{
+      type,
+      name,
+      code: text(item?.country_code) ?? text(item?.region_code_full),
+    }];
+  });
+}
+
+function placeCandidate(value: unknown, query: string): RankedGeocodedPlace | undefined {
+  const feature = record(value);
+  const properties = record(feature?.properties);
+  const point = coordinates(record(feature?.geometry)?.coordinates);
+  const featureType = text(properties?.feature_type) ?? text(feature?.type);
+  const name = text(properties?.name_preferred) ?? text(properties?.name) ?? text(feature?.text);
+  if (!feature || !properties || !point || !featureType || !name) return undefined;
+
+  const context = contextItems(properties.context);
+  const country = context.find((item) => item.type === "country");
+  if (country?.code && country.code.toUpperCase() !== "IS") return undefined;
+
+  const fullName = text(properties.full_address) ?? text(feature.place_name) ?? name;
+  const queryName = normalized(query);
+  const preferredName = normalized(name);
+  const alternateName = normalized(text(properties.name) ?? name);
+  const placeTypeScore = featureType === "place" ? 1_000 : featureType === "locality" ? 800 : 0;
+  const nameScore = preferredName === queryName || alternateName === queryName
+    ? 200
+    : preferredName.startsWith(`${queryName} `) || preferredName.startsWith(`${queryName} í `)
+      ? 120
+      : preferredName.includes(queryName)
+        ? 40
+        : 0;
+
+  return {
+    name,
+    fullName,
+    coordinates: point,
+    featureType,
+    mapboxId: text(properties.mapbox_id) ?? text(feature.id),
+    context,
+    rank: placeTypeScore + nameScore,
+  };
+}
+
 export async function geocodeIceland(query: string): Promise<GeocodedPlace> {
   const trimmed = query.trim();
   if (!trimmed) throw new ServiceError("Location is required", "INVALID_LOCATION", 400);
   const url = new URL("https://api.mapbox.com/search/geocode/v6/forward");
   url.searchParams.set("q", trimmed);
   url.searchParams.set("access_token", getToken());
-  url.searchParams.set("country", "is");
+  url.searchParams.set("country", "IS");
   url.searchParams.set("bbox", ICELAND_BBOX);
-  url.searchParams.set("language", "en,is");
+  url.searchParams.set("language", "is,en");
   url.searchParams.set("autocomplete", "false");
-  url.searchParams.set("limit", "1");
+  url.searchParams.set("limit", "10");
   const body = record(await mapboxJson(url));
-  const feature = record(Array.isArray(body?.features) ? body.features[0] : undefined);
-  const point = coordinates(record(feature?.geometry)?.coordinates);
-  if (!feature || !point) throw new ServiceError(`No Icelandic location found for “${trimmed}”`, "LOCATION_NOT_FOUND", 400);
-  const properties = record(feature.properties);
-  const name = text(properties?.name) ?? text(feature.text) ?? trimmed;
+  const candidates = (Array.isArray(body?.features) ? body.features : [])
+    .map((feature) => placeCandidate(feature, trimmed))
+    .filter((place): place is RankedGeocodedPlace => Boolean(place))
+    .sort((a, b) => b.rank - a.rank);
+  const selected = candidates[0];
+  if (!selected || selected.rank === 0) {
+    throw new ServiceError(`No Icelandic location found for “${trimmed}”`, "LOCATION_NOT_FOUND", 400);
+  }
   return {
-    name,
-    fullName: text(properties?.full_address) ?? text(feature.place_name) ?? name,
-    coordinates: point,
+    name: selected.name,
+    fullName: selected.fullName,
+    coordinates: selected.coordinates,
+    featureType: selected.featureType,
+    mapboxId: selected.mapboxId,
+    context: selected.context,
   };
 }
 

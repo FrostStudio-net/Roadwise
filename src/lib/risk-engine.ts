@@ -24,6 +24,11 @@ export const RISK_THRESHOLDS = {
     passenger: { cautionMps: 15, difficultMps: 22 },
     highProfile: { cautionMps: 10, difficultMps: 18 },
   },
+  freshness: {
+    warningStaleAfterMinutes: 180,
+    stationObservationMaxAgeMinutes: 120,
+    roadDataStaleAfterMinutes: 30,
+  },
 } as const;
 
 const levelRank: Record<RiskLevel, number> = { normal: 0, caution: 1, difficult: 2, closed: 3 };
@@ -68,6 +73,16 @@ function firstSectionCoordinate(condition: RoadCondition): Coordinates | undefin
   return geometry.type === "LineString" ? geometry.coordinates[0] : geometry.coordinates[0]?.[0];
 }
 
+function ageMinutes(value?: string): number | undefined {
+  if (!value || Number.isNaN(Date.parse(value))) return undefined;
+  return Math.max(0, (Date.now() - Date.parse(value)) / 60_000);
+}
+
+function warningIsStale(value?: string): boolean {
+  const age = ageMinutes(value);
+  return age !== undefined && age > RISK_THRESHOLDS.freshness.warningStaleAfterMinutes;
+}
+
 function conditionWarning(condition: RoadCondition): RouteWarning | undefined {
   const details = conditionDetails[condition.state];
   if (!details) return undefined;
@@ -79,23 +94,44 @@ function conditionWarning(condition: RoadCondition): RouteWarning | undefined {
     description: condition.description ?? (location ? `Official condition reported on ${location}.` : "Official road condition reported on this route."),
     severity: details.severity,
     source: "IRCA",
+    sourceRecordId: condition.id,
+    sourceType: condition.sourceType,
+    roadNumber: condition.section?.roadNumbers.join(", ") || undefined,
+    roadName: condition.section?.name,
+    matchedSectionId: condition.section?.id,
+    matchedGeometry: condition.routeMatch?.matchedGeometry,
+    distanceFromRouteMeters: condition.routeMatch?.distanceFromRouteMeters,
+    distanceAheadKm: condition.routeMatch?.distanceAheadKm,
+    officialCondition: condition.state,
+    officialComment: condition.description,
     coordinates: firstSectionCoordinate(condition),
     updatedAt: condition.updatedAt,
+    stale: warningIsStale(condition.updatedAt),
   };
 }
 
 function incidentWarning(incident: RoadIncident): RouteWarning {
   const details = incidentDetails[incident.type];
+  const unconfirmedPointClosure = incident.type === "roadClosed" && !incident.routeMatch?.criticalMatch;
   return {
     id: `incident-${incident.id}`,
     type: incident.type,
-    title: details.title,
+    title: unconfirmedPointClosure ? "Closure reported near route" : details.title,
     description: incident.description ?? "Official road incident reported close to this route.",
-    severity: details.severity,
+    severity: unconfirmedPointClosure ? "difficult" : details.severity,
     source: "IRCA",
+    sourceRecordId: incident.id,
+    sourceType: incident.sourceType,
+    roadNumber: incident.roadNumber,
+    roadName: incident.roadName,
+    matchedGeometry: incident.routeMatch?.matchedGeometry,
+    distanceFromRouteMeters: incident.routeMatch?.distanceFromRouteMeters,
     distanceAheadKm: incident.distanceAheadKm,
+    officialCondition: incident.type,
+    officialComment: incident.description,
     coordinates: incident.coordinates,
     updatedAt: incident.updatedAt,
+    stale: warningIsStale(incident.updatedAt),
   };
 }
 
@@ -113,6 +149,10 @@ function windWarning(input: RiskEngineInput): RouteWarning | undefined {
       speed: measurement.values.maximumWindSpeedMps ?? measurement.values.windSpeedMps,
     }))
     .filter((item): item is typeof item & { speed: number } => item.speed !== undefined)
+    .filter(({ measurement }) => {
+      const age = ageMinutes(measurement.observedAt);
+      return age === undefined || age <= RISK_THRESHOLDS.freshness.stationObservationMaxAgeMinutes;
+    })
     .sort((a, b) => b.speed - a.speed)[0];
   if (!strongest || strongest.speed < thresholds.cautionMps) return undefined;
   const severity: WarningSeverity = strongest.speed >= thresholds.difficultMps ? "difficult" : "caution";
@@ -124,9 +164,14 @@ function windWarning(input: RiskEngineInput): RouteWarning | undefined {
     description: `IRCA measured ${strongest.speed.toFixed(1)} m/s at ${strongest.measurement.name}.${vehicleNote}`,
     severity,
     source: "Roadwise-derived",
+    sourceRecordId: strongest.measurement.id,
+    sourceType: "IRCA roadside measurement",
+    roadName: strongest.measurement.name,
+    distanceFromRouteMeters: strongest.measurement.distanceFromRouteMeters,
     distanceAheadKm: strongest.measurement.distanceAheadKm,
     coordinates: strongest.measurement.coordinates,
     observedAt: strongest.measurement.observedAt,
+    stale: warningIsStale(strongest.measurement.observedAt),
   };
 }
 
@@ -146,7 +191,14 @@ function warningLevel(warnings: RouteWarning[]): RiskLevel {
 function deduplicateWarnings(warnings: RouteWarning[]): RouteWarning[] {
   const seen = new Set<string>();
   return warnings
-    .sort((a, b) => severityRank[b.severity] - severityRank[a.severity])
+    .sort((a, b) => {
+      const criticalDifference = Number(b.severity === "closed") - Number(a.severity === "closed");
+      if (criticalDifference !== 0) return criticalDifference;
+      const aDistance = a.distanceAheadKm ?? Number.POSITIVE_INFINITY;
+      const bDistance = b.distanceAheadKm ?? Number.POSITIVE_INFINITY;
+      if (aDistance !== bDistance) return aDistance - bDistance;
+      return severityRank[b.severity] - severityRank[a.severity];
+    })
     .filter((warning) => {
       const key = `${warning.source}:${warning.type}:${warning.title}:${warning.distanceAheadKm ?? ""}`;
       if (seen.has(key)) return false;
@@ -167,7 +219,12 @@ export function analyseRoute(input: RiskEngineInput): RouteAnalysis {
       description: warning.description ?? warning.event ?? "Official meteorological warning affecting this route.",
       severity: imoSeverity(warning.severity),
       source: "IMO",
+      sourceRecordId: warning.identifier,
+      sourceType: warning.event,
+      officialCondition: warning.severity,
+      officialComment: warning.description,
       updatedAt: warning.sentAt,
+      stale: warningIsStale(warning.sentAt),
     })),
     ...(derivedWindWarning ? [derivedWindWarning] : []),
   ]);
@@ -175,23 +232,31 @@ export function analyseRoute(input: RiskEngineInput): RouteAnalysis {
   // Explicit official closures are absolute and cannot be reduced by derived data.
   const officialClosure = warnings.some((warning) => warning.source === "IRCA" && warning.severity === "closed");
   const level = officialClosure ? "closed" : warningLevel(warnings);
+  const triggeredByWarningIds = warnings
+    .filter((warning) => (warning.severity === "info" ? "normal" : warning.severity) === level)
+    .map((warning) => warning.id);
+  const explainedWarnings = warnings.map((warning) => ({
+    ...warning,
+    affectsOverallLevel: triggeredByWarningIds.includes(warning.id),
+  }));
+  const safetyReminder = "Conditions can change quickly. Always follow official signs and instructions.";
   const copy: Record<RiskLevel, { title: string; summary: string }> = {
     normal: {
       title: "Normal conditions reported",
-      summary: "No significant route hazards were reported by the available official sources. Conditions can change rapidly.",
+      summary: `No significant route hazards were reported by the available official sources. ${safetyReminder}`,
     },
     caution: {
       title: "Use caution",
-      summary: "Official or measured conditions on this route deserve attention. Conditions can change rapidly.",
+      summary: `Official or measured conditions on this route deserve attention. ${safetyReminder}`,
     },
     difficult: {
       title: "Difficult conditions",
-      summary: "Severe official or measured conditions affect this route. Reconsider the drive and consult official guidance.",
+      summary: `Severe official or measured conditions affect this route. Reconsider the drive and consult official guidance. ${safetyReminder}`,
     },
     closed: {
       title: "Road closed / official severe condition",
-      summary: "An official closure affects this route. Do not continue onto the closed section.",
+      summary: `An official closure affects this route. Do not continue onto the closed section. ${safetyReminder}`,
     },
   };
-  return { available: true, level, ...copy[level], warnings };
+  return { available: true, level, ...copy[level], warnings: explainedWarnings, triggeredByWarningIds };
 }

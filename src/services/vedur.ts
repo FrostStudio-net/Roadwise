@@ -1,4 +1,5 @@
 import { fetchOfficialFeed, unavailableFeed } from "@/services/http";
+import { developmentError } from "@/lib/server-log";
 import type { Coordinates, FeedResult, GeoJsonPolygon, ImoWarning } from "@/types/road";
 
 const WARNINGS_URL = "https://api.vedur.is/capbroker/active/detailed/all";
@@ -75,7 +76,8 @@ export async function getActiveWarnings(): Promise<FeedResult<ImoWarning[]>> {
       data: parsed.map(parseWarning).filter((warning): warning is ImoWarning => Boolean(warning)),
       updatedAt: raw.updatedAt,
     };
-  } catch {
+  } catch (error) {
+    developmentError("imo:warnings", error);
     return unavailableFeed([], "IMO warnings are unavailable");
   }
 }
