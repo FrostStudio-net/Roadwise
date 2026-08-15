@@ -113,6 +113,27 @@ export type MapboxRoute = {
   durationSeconds: number;
 };
 
+export type RouteTimingStage =
+  | "originResolutionMs"
+  | "destinationResolutionMs"
+  | "mapboxDirectionsMs"
+  | "ircaCacheLookupMs"
+  | "ircaRoadConditionsFetchMs"
+  | "ircaIncidentsFetchMs"
+  | "ircaSectionsFetchMs"
+  | "ircaStationsFetchMs"
+  | "ircaMeasurementsFetchMs"
+  | "datexParsingMs"
+  | "routeSpatialMatchingMs"
+  | "imoWarningsMs"
+  | "riskEngineMs";
+
+export type RouteAnalysisTimings = Record<RouteTimingStage, number> & {
+  requestId: string;
+  totalMs: number;
+  ircaCacheStatus: "hit" | "miss" | "partial-fallback";
+};
+
 export type AnalyseRouteResponse = {
   vehicle: VehicleType;
   route: {
@@ -156,4 +177,5 @@ export type AnalyseRouteResponse = {
   debug?: {
     matchedRecords: AnalysisDebugRecord[];
   };
+  timings?: RouteAnalysisTimings;
 };

@@ -16,11 +16,15 @@ export default function HomePage() {
   const [destination, setDestination] = useState("");
   const [selectedDestination, setSelectedDestination] = useState<GeocodedPlace>();
   const [vehicle, setVehicle] = useState<VehicleType>("Small car (2WD)");
+  const [checking, setChecking] = useState(false);
 
   function checkDrive() {
+    if (checking) return;
+    setChecking(true);
     const params = new URLSearchParams({ destination: destination || "Vík", vehicle });
     if (selectedDestination?.mapboxId) params.set("destinationId", selectedDestination.mapboxId);
     router.push(`/check?${params.toString()}`);
+    window.setTimeout(() => setChecking(false), 2_000);
   }
 
   return (
@@ -49,7 +53,7 @@ export default function HomePage() {
 
         <section className="section-block-lg">
           <div className="mb-3 flex items-end justify-between"><div><div className="eyebrow">Plan ahead</div><h2 className="mt-1 text-lg font-semibold tracking-[-0.025em]">Where to?</h2></div><span className="text-[10px] text-[#7f8c89]">From Reykjavík</span></div>
-          <DestinationAutocomplete value={destination} onValueChange={(value) => { setDestination(value); setSelectedDestination(undefined); clearDestinationSelection(); }} onSelect={(place) => { setDestination(place.name); setSelectedDestination(place); storeDestinationSelection(place); }} onSubmit={checkDrive} />
+          <DestinationAutocomplete value={destination} onValueChange={(value) => { setDestination(value); setSelectedDestination(undefined); clearDestinationSelection(); }} onSelect={(place) => { setDestination(place.name); setSelectedDestination(place); storeDestinationSelection(place); }} onSubmit={checkDrive} disabled={checking} />
         </section>
 
         <section className="section-block">

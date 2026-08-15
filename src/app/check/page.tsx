@@ -15,6 +15,39 @@ type AnalyseErrorResponse = {
   error?: { message?: string };
 };
 
+type AnalyseRequest = {
+  origin: string;
+  destination: string;
+  vehicle: VehicleType;
+  destinationSelection: ReturnType<typeof readDestinationSelection>;
+};
+
+const ANALYSIS_REQUEST_TTL_MS = 60_000;
+const analysisRequests = new globalThis.Map<string, { expiresAt: number; promise: Promise<AnalyseRouteResponse> }>();
+
+function requestAnalysis(body: AnalyseRequest): Promise<AnalyseRouteResponse> {
+  const key = JSON.stringify(body);
+  const existing = analysisRequests.get(key);
+  if (existing && existing.expiresAt > Date.now()) return existing.promise;
+  const promise = fetch("/api/analyse", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: key,
+  }).then(async (response) => {
+    const data = await response.json() as AnalyseRouteResponse | AnalyseErrorResponse;
+    if (!response.ok) {
+      const failure = data as AnalyseErrorResponse;
+      throw new Error(failure.error?.message ?? "Route analysis is currently unavailable");
+    }
+    return data as AnalyseRouteResponse;
+  }).catch((error: unknown) => {
+    analysisRequests.delete(key);
+    throw error;
+  });
+  analysisRequests.set(key, { expiresAt: Date.now() + ANALYSIS_REQUEST_TTL_MS, promise });
+  return promise;
+}
+
 export default function CheckPage() {
   return <Suspense fallback={<CheckLoading />}><CheckContent /></Suspense>;
 }
@@ -31,35 +64,23 @@ function CheckContent() {
   const [requestError, setRequestError] = useState<string>();
 
   useEffect(() => {
-    const controller = new AbortController();
-    fetch("/api/analyse", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ origin: "Reykjavík", destination, vehicle, destinationSelection: readDestinationSelection(destinationId) }),
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        const data = await response.json() as AnalyseRouteResponse | AnalyseErrorResponse;
-        if (!response.ok) {
-          const failure = data as AnalyseErrorResponse;
-          throw new Error(failure.error?.message ?? "Route analysis is currently unavailable");
-        }
-        return data as AnalyseRouteResponse;
-      })
+    let active = true;
+    requestAnalysis({ origin: "Reykjavík", destination, vehicle, destinationSelection: readDestinationSelection(destinationId) })
       .then((data) => {
+        if (!active) return;
         setResult(data);
         setRequestError(undefined);
         storeRouteAnalysis(data);
       })
       .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === "AbortError") return;
+        if (!active) return;
         setResult(undefined);
         setRequestError(error instanceof Error ? error.message : "Route analysis is currently unavailable");
       })
       .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
+        if (active) setLoading(false);
       });
-    return () => controller.abort();
+    return () => { active = false; };
   }, [destination, destinationId, vehicle]);
 
   const route = result?.route;
@@ -81,9 +102,7 @@ function CheckContent() {
         </section>
 
         {loading ? (
-          <section className="glass card section-block flex min-h-52 items-center justify-center p-6 text-center">
-            <div><span className="breathing mx-auto block h-2 w-2 rounded-full bg-[#d48c6b]" /><h2 className="mt-4 text-[18px] font-semibold">Checking your route...</h2><p className="mt-2 text-[12px] text-[#8e9b98]">Reading official road and weather sources</p></div>
-          </section>
+          <AnalysisLoading />
         ) : requestError || !analysis ? (
           <section className="glass card section-block p-6">
             <CloudOff size={27} className="text-[#d48c6b]" /><h2 className="mt-4 text-[21px] font-semibold text-[#e8c4b0]">Route check unavailable</h2><p className="mt-3 text-[13px] leading-6 text-[#a5afac]">{requestError ?? "Route analysis is currently unavailable. Please try again."}</p>
@@ -116,6 +135,22 @@ function CheckContent() {
       </main><BottomNav />
     </>
   );
+}
+
+const LOADING_STAGES = [
+  "Finding your route",
+  "Checking Icelandic roads",
+  "Checking live conditions",
+  "Preparing your drive",
+] as const;
+
+function AnalysisLoading() {
+  const [stage, setStage] = useState(0);
+  useEffect(() => {
+    const timers = [900, 2_100, 3_400].map((delay, index) => window.setTimeout(() => setStage(index + 1), delay));
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, []);
+  return <section className="glass card section-block flex min-h-52 items-center justify-center p-6 text-center"><div><span className="breathing mx-auto block h-2 w-2 rounded-full bg-[#d48c6b]" /><h2 className="mt-4 text-[18px] font-semibold">{LOADING_STAGES[stage]}</h2><p className="mt-2 text-[12px] text-[#8e9b98]">Road and weather checks run together</p></div></section>;
 }
 
 function CheckLoading() {

@@ -1,6 +1,7 @@
 "use client";
 
-import { distance, point } from "@turf/turf";
+import distance from "@turf/distance";
+import { point } from "@turf/helpers";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ROUTE_PROGRESS_CONFIG } from "@/lib/route-progress";

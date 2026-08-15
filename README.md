@@ -52,6 +52,8 @@ Successful responses contain:
 - normalized route warnings with source and distance ahead where available;
 - independent IRCA and IMO source availability and freshness.
 
+Stage timings are logged server-side with a short request ID. They are included in non-production API responses; set `DEBUG_ROUTE_ANALYSIS=true` to include the same non-sensitive timing object in a production response while diagnosing latency.
+
 Mapbox routing is required. IRCA incidents, roadside measurements and IMO warnings are independently available non-critical sources. Core IRCA road-condition availability determines whether Roadwise can report a live-road result.
 
 ## Official sources and caching
@@ -60,7 +62,9 @@ Mapbox routing is required. IRCA incidents, roadside measurements and IMO warnin
 - IRCA predefined section geometry and measurement-site definitions: revalidated hourly.
 - IRCA camera catalogue: revalidated every 15 minutes.
 - IMO active CAP warnings: revalidated every 5 minutes. HTTP 204 is a valid response meaning there are no active warnings.
-- Mapbox temporary geocoding and directions: requested per route check and not stored in the application data cache.
+- A normalized IRCA snapshot is reused for 5 minutes in each warm server instance; individual normalized feeds retain the revalidation periods above and failed loads are not stored as a successful snapshot.
+- Common Mapbox geocodes are cached for 24 hours. Driving route geometry is cached for 5 minutes for identical coordinate pairs.
+- Spatial matches for identical route geometry and official-data snapshots are reused for 5 minutes; the vehicle-specific risk engine still runs for every analysis.
 
 The DATEX parser projects IRCA's detailed EPSG:3057 GML section geometry to WGS84 and uses conservative spatial/co-travel matching. Sparse OpenLR coordinates are retained only as a fallback.
 

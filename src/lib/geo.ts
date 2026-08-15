@@ -1,16 +1,11 @@
-import {
-  along,
-  booleanIntersects,
-  buffer,
-  length,
-  lineString,
-  multiLineString,
-  nearestPointOnLine,
-  point,
-  pointToLineDistance,
-  polygon,
-  simplify,
-} from "@turf/turf";
+import along from "@turf/along";
+import booleanIntersects from "@turf/boolean-intersects";
+import buffer from "@turf/buffer";
+import { lineString, multiLineString, point, polygon } from "@turf/helpers";
+import length from "@turf/length";
+import nearestPointOnLine from "@turf/nearest-point-on-line";
+import pointToLineDistance from "@turf/point-to-line-distance";
+import simplify from "@turf/simplify";
 
 import type {
   Coordinates,
@@ -45,6 +40,40 @@ type LinearMatch = {
   overlapLengthMeters: number;
 };
 
+type Bounds = [minLongitude: number, minLatitude: number, maxLongitude: number, maxLatitude: number];
+
+function coordinateBounds(coordinates: Coordinates[]): Bounds {
+  return coordinates.reduce<Bounds>(
+    (result, coordinate) => [
+      Math.min(result[0], coordinate[0]),
+      Math.min(result[1], coordinate[1]),
+      Math.max(result[2], coordinate[0]),
+      Math.max(result[3], coordinate[1]),
+    ],
+    [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY],
+  );
+}
+
+function expandedRouteBounds(route: GeoJsonLineString, distanceMeters: number): Bounds {
+  const bounds = coordinateBounds(route.coordinates);
+  const longitudePadding = distanceMeters / 40_000;
+  const latitudePadding = distanceMeters / 110_000;
+  return [
+    bounds[0] - longitudePadding,
+    bounds[1] - latitudePadding,
+    bounds[2] + longitudePadding,
+    bounds[3] + latitudePadding,
+  ];
+}
+
+function boundsOverlap(left: Bounds, right: Bounds): boolean {
+  return left[0] <= right[2] && left[2] >= right[0] && left[1] <= right[3] && left[3] >= right[1];
+}
+
+function geometryBounds(geometry: MatchedLinearGeometry): Bounds {
+  return coordinateBounds(geometryLines(geometry).flat());
+}
+
 function routeFeature(route: GeoJsonLineString) {
   return lineString(route.coordinates);
 }
@@ -53,17 +82,35 @@ function matchingRouteFeature(route: GeoJsonLineString) {
   return simplify(routeFeature(route), { tolerance: 0.000025, highQuality: true });
 }
 
-function distanceAheadKm(route: GeoJsonLineString, coordinates: Coordinates): number {
-  const snapped = nearestPointOnLine(routeFeature(route), point(coordinates), { units: "kilometers" });
+function distanceAheadKm(
+  route: GeoJsonLineString,
+  coordinates: Coordinates,
+  fullRouteLine = routeFeature(route),
+): number {
+  const snapped = nearestPointOnLine(fullRouteLine, point(coordinates), { units: "kilometers" });
   return Math.max(0, Math.round((snapped.properties.location ?? 0) * 10) / 10);
+}
+
+function pointRouteMetrics(fullRouteLine: ReturnType<typeof routeFeature>, coordinates: Coordinates) {
+  const snapped = nearestPointOnLine(fullRouteLine, point(coordinates), { units: "kilometers" });
+  return {
+    distanceMeters: Math.round((snapped.properties.dist
+      ?? pointToLineDistance(point(coordinates), fullRouteLine, { units: "kilometers" })) * 1_000),
+    distanceAheadKm: Math.max(0, Math.round((snapped.properties.location ?? 0) * 10) / 10),
+  };
 }
 
 function geometryLines(geometry: MatchedLinearGeometry): Coordinates[][] {
   return geometry.type === "LineString" ? [geometry.coordinates] : geometry.coordinates;
 }
 
-function lineMatch(route: GeoJsonLineString, coordinates: Coordinates[], proximityMeters: number): LinearMatch {
-  const routeLine = matchingRouteFeature(route);
+function lineMatch(
+  route: GeoJsonLineString,
+  coordinates: Coordinates[],
+  proximityMeters: number,
+  routeLine = matchingRouteFeature(route),
+  fullRouteLine = routeFeature(route),
+): LinearMatch {
   const candidateLine = lineString(coordinates);
   const candidateLengthKm = length(candidateLine, { units: "kilometers" });
   const intervalKm = ROUTE_MATCHING_CONFIG.sampleIntervalMeters / 1_000;
@@ -96,14 +143,20 @@ function lineMatch(route: GeoJsonLineString, coordinates: Coordinates[], proximi
   if (booleanIntersects(routeLine, candidateLine)) minimumDistanceKm = 0;
   return {
     distanceFromRouteMeters: Math.round(minimumDistanceKm * 1_000),
-    distanceAheadKm: distanceAheadKm(route, nearestCoordinate),
+    distanceAheadKm: distanceAheadKm(route, nearestCoordinate, fullRouteLine),
     overlapLengthMeters: Math.round(maximumNearMeters),
   };
 }
 
-function geometryMatch(route: GeoJsonLineString, geometry: MatchedLinearGeometry, proximityMeters: number): LinearMatch {
+function geometryMatch(
+  route: GeoJsonLineString,
+  geometry: MatchedLinearGeometry,
+  proximityMeters: number,
+  routeLine = matchingRouteFeature(route),
+  fullRouteLine = routeFeature(route),
+): LinearMatch {
   return geometryLines(geometry)
-    .map((coordinates) => lineMatch(route, coordinates, proximityMeters))
+    .map((coordinates) => lineMatch(route, coordinates, proximityMeters, routeLine, fullRouteLine))
     .sort((a, b) => b.overlapLengthMeters - a.overlapLengthMeters
       || a.distanceFromRouteMeters - b.distanceFromRouteMeters)[0];
 }
@@ -126,15 +179,18 @@ export function matchIncidentsToRoute(
   maximumDistanceMeters = ROUTE_MATCHING_CONFIG.incidentMatchMeters,
 ): RoadIncident[] {
   const routeLine = routeFeature(route);
-  const generalArea = buffer(matchingRouteFeature(route), maximumDistanceMeters / 1_000, { units: "kilometers" });
-  const criticalArea = buffer(matchingRouteFeature(route), ROUTE_MATCHING_CONFIG.criticalRouteMatchMeters / 1_000, { units: "kilometers" });
+  const simplifiedRouteLine = matchingRouteFeature(route);
+  const routeBounds = expandedRouteBounds(route, maximumDistanceMeters);
+  const generalArea = buffer(simplifiedRouteLine, maximumDistanceMeters / 1_000, { units: "kilometers" });
+  const criticalArea = buffer(simplifiedRouteLine, ROUTE_MATCHING_CONFIG.criticalRouteMatchMeters / 1_000, { units: "kilometers" });
   return incidents.flatMap((incident) => {
     if (incident.geometry) {
       const critical = incident.type === "roadClosed";
       const distanceLimit = critical ? ROUTE_MATCHING_CONFIG.criticalRouteMatchMeters : maximumDistanceMeters;
       const matchArea = critical ? criticalArea : generalArea;
+      if (!boundsOverlap(routeBounds, geometryBounds(incident.geometry))) return [];
       if (!matchArea || !booleanIntersects(matchArea, matchedGeometryFeature(incident.geometry))) return [];
-      const metrics = geometryMatch(route, incident.geometry, distanceLimit);
+      const metrics = geometryMatch(route, incident.geometry, distanceLimit, simplifiedRouteLine, routeLine);
       const criticalMatch = critical
         && metrics.distanceFromRouteMeters <= distanceLimit
         && metrics.overlapLengthMeters >= ROUTE_MATCHING_CONFIG.criticalMinimumOverlapMeters;
@@ -148,15 +204,15 @@ export function matchIncidentsToRoute(
       return [{ ...incident, routeMatch, distanceAheadKm: metrics.distanceAheadKm }];
     }
     if (!incident.coordinates) return [];
-    const distanceMeters = pointToLineDistance(point(incident.coordinates), routeLine, { units: "kilometers" }) * 1_000;
-    if (distanceMeters > maximumDistanceMeters) return [];
-    const ahead = distanceAheadKm(route, incident.coordinates);
+    if (!boundsOverlap(routeBounds, coordinateBounds([incident.coordinates]))) return [];
+    const metrics = pointRouteMetrics(routeLine, incident.coordinates);
+    if (metrics.distanceMeters > maximumDistanceMeters) return [];
     return [{
       ...incident,
-      distanceAheadKm: ahead,
+      distanceAheadKm: metrics.distanceAheadKm,
       routeMatch: {
-        distanceFromRouteMeters: Math.round(distanceMeters),
-        distanceAheadKm: ahead,
+        distanceFromRouteMeters: metrics.distanceMeters,
+        distanceAheadKm: metrics.distanceAheadKm,
         // A point alone cannot prove that an official closure applies to the driven carriageway.
         criticalMatch: false,
       },
@@ -166,6 +222,8 @@ export function matchIncidentsToRoute(
 
 export function matchRoadConditionsToRoute(route: GeoJsonLineString, conditions: RoadCondition[]): RoadCondition[] {
   const routeLine = matchingRouteFeature(route);
+  const fullRouteLine = routeFeature(route);
+  const routeBounds = expandedRouteBounds(route, ROUTE_MATCHING_CONFIG.roadConditionMatchMeters);
   const criticalArea = buffer(routeLine, ROUTE_MATCHING_CONFIG.criticalRouteMatchMeters / 1_000, { units: "kilometers" });
   const conditionArea = buffer(routeLine, ROUTE_MATCHING_CONFIG.roadConditionMatchMeters / 1_000, { units: "kilometers" });
   return conditions.flatMap((condition) => {
@@ -179,8 +237,9 @@ export function matchRoadConditionsToRoute(route: GeoJsonLineString, conditions:
       ? ROUTE_MATCHING_CONFIG.criticalMinimumOverlapMeters
       : ROUTE_MATCHING_CONFIG.roadConditionMinimumOverlapMeters;
     const matchArea = critical ? criticalArea : conditionArea;
+    if (!boundsOverlap(routeBounds, geometryBounds(geometry))) return [];
     if (!matchArea || !booleanIntersects(matchArea, matchedGeometryFeature(geometry))) return [];
-    const metrics = geometryMatch(route, geometry, proximityMeters);
+    const metrics = geometryMatch(route, geometry, proximityMeters, routeLine, fullRouteLine);
     if (metrics.distanceFromRouteMeters > proximityMeters || metrics.overlapLengthMeters < minimumOverlapMeters) return [];
     return [{
       ...condition,
@@ -199,13 +258,15 @@ export function matchMeasurementsToRoute(
   maximumDistanceMeters = ROUTE_MATCHING_CONFIG.weatherStationMatchMeters,
 ): RoadsideMeasurement[] {
   const line = routeFeature(route);
+  const routeBounds = expandedRouteBounds(route, maximumDistanceMeters);
   return measurements.flatMap((measurement) => {
-    const distanceMeters = pointToLineDistance(point(measurement.coordinates), line, { units: "kilometers" }) * 1_000;
-    if (distanceMeters > maximumDistanceMeters) return [];
+    if (!boundsOverlap(routeBounds, coordinateBounds([measurement.coordinates]))) return [];
+    const metrics = pointRouteMetrics(line, measurement.coordinates);
+    if (metrics.distanceMeters > maximumDistanceMeters) return [];
     return [{
       ...measurement,
-      distanceFromRouteMeters: Math.round(distanceMeters),
-      distanceAheadKm: distanceAheadKm(route, measurement.coordinates),
+      distanceFromRouteMeters: metrics.distanceMeters,
+      distanceAheadKm: metrics.distanceAheadKm,
     }];
   });
 }

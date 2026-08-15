@@ -6,8 +6,10 @@ import {
   matchMeasurementsToRoute,
   matchRoadConditionsToRoute,
 } from "@/lib/geo";
+import { RouteTimingCollector, withRouteTiming } from "@/lib/analysis-timing";
+import { cachedRouteDataMatches } from "@/lib/route-matching-cache";
 import { analyseRoute, RISK_THRESHOLDS } from "@/lib/risk-engine";
-import { developmentError, developmentLog } from "@/lib/server-log";
+import { developmentError, developmentLog, routeTimingLog } from "@/lib/server-log";
 import { ServiceError } from "@/services/http";
 import { geocodeIceland, getDrivingRoute } from "@/services/mapbox";
 import { getIrcaData } from "@/services/vegagerdin";
@@ -101,7 +103,22 @@ function conditionCoordinate(condition: RoadCondition): Coordinates | undefined 
   return geometry.type === "LineString" ? geometry.coordinates[0] : geometry.coordinates[0]?.[0];
 }
 
+function exposeTimings(): boolean {
+  return process.env.NODE_ENV !== "production" || process.env.DEBUG_ROUTE_ANALYSIS === "true";
+}
+
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID().slice(0, 8);
+  const collector = new RouteTimingCollector(requestId);
+  const requestStartedAt = performance.now();
+  try {
+    return await withRouteTiming(collector, () => analyseRequest(request, collector, requestStartedAt));
+  } finally {
+    routeTimingLog(collector.snapshot(performance.now() - requestStartedAt));
+  }
+}
+
+async function analyseRequest(request: Request, collector: RouteTimingCollector, requestStartedAt: number) {
   let body: unknown;
   let mapboxAvailable = false;
   try {
@@ -114,33 +131,56 @@ export async function POST(request: Request) {
   }
 
   try {
-    const officialDataPromise = Promise.all([getIrcaData(), getActiveWarnings()]);
-    const origin = await geocodeIceland(body.origin);
+    const officialDataPromise = Promise.all([
+      getIrcaData(),
+      collector.measure("imoWarningsMs", getActiveWarnings),
+    ]);
+    const [origin, destination] = await Promise.all([
+      collector.measure("originResolutionMs", () => geocodeIceland(body.origin)),
+      collector.measure("destinationResolutionMs", () => body.destinationSelection
+        ? Promise.resolve(body.destinationSelection)
+        : geocodeIceland(body.destination)),
+    ]);
     developmentLog(`[analyse] geocoded ${body.origin} -> ${origin.fullName} (${coordinateLabel(origin.coordinates)})`);
-    const destination = body.destinationSelection ?? await geocodeIceland(body.destination);
     developmentLog(`[analyse] geocoded ${body.destination} -> ${destination.fullName} (${coordinateLabel(destination.coordinates)})`);
-    const route = await getDrivingRoute(origin.coordinates, destination.coordinates);
+    const route = await collector.measure(
+      "mapboxDirectionsMs",
+      () => getDrivingRoute(origin.coordinates, destination.coordinates),
+    );
     mapboxAvailable = true;
     developmentLog(`[analyse] mapbox route ${(route.distanceMeters / 1_000).toFixed(1)} km`);
     const [irca, imo] = await officialDataPromise;
     developmentLog(`[analyse] IRCA: ${irca.roadConditions.data.length} road conditions, ${irca.incidents.data.length} incidents, ${irca.measurements.data.length} measurements`);
 
-    const roadConditions = irca.roadConditions.available && irca.sections.available
-      ? matchRoadConditionsToRoute(route.geometry, irca.roadConditions.data)
-      : [];
-    const incidents = irca.incidents.available
-      ? matchIncidentsToRoute(route.geometry, irca.incidents.data)
-      : [];
-    const measurements = irca.measurements.available
-      ? matchMeasurementsToRoute(route.geometry, irca.measurements.data)
-      : [];
-    const imoWarnings = imo.available
-      ? matchImoWarningsToRoute(route.geometry, imo.data)
-      : [];
+    const { roadConditions, incidents, measurements, imoWarnings } = collector.measureSync(
+      "routeSpatialMatchingMs",
+      () => cachedRouteDataMatches(
+        route.geometry,
+        irca.snapshotId,
+        imo.updatedAt ?? imo.data.map((warning) => warning.identifier).join(","),
+        () => ({
+        roadConditions: irca.roadConditions.available && irca.sections.available
+          ? matchRoadConditionsToRoute(route.geometry, irca.roadConditions.data)
+          : [],
+        incidents: irca.incidents.available
+          ? matchIncidentsToRoute(route.geometry, irca.incidents.data)
+          : [],
+        measurements: irca.measurements.available
+          ? matchMeasurementsToRoute(route.geometry, irca.measurements.data)
+          : [],
+        imoWarnings: imo.available
+          ? matchImoWarningsToRoute(route.geometry, imo.data)
+          : [],
+        }),
+      ),
+    );
     developmentLog(`[analyse] matched: ${roadConditions.length} conditions, ${incidents.length} incidents, ${measurements.length} stations`);
     developmentLog(`[analyse] IMO: ${imo.data.length} active warnings`);
 
-    const computed = analyseRoute({ vehicle: body.vehicle, roadConditions, incidents, measurements, imoWarnings });
+    const computed = collector.measureSync(
+      "riskEngineMs",
+      () => analyseRoute({ vehicle: body.vehicle, roadConditions, incidents, measurements, imoWarnings }),
+    );
     const coreRoadDataAvailable = irca.roadConditions.available;
     const analysis = coreRoadDataAvailable
       ? computed
@@ -203,6 +243,7 @@ export async function POST(request: Request) {
         roadsideStations: measurements.length,
         imoWarnings: imoWarnings.length,
       },
+      ...(exposeTimings() ? { timings: collector.snapshot(performance.now() - requestStartedAt) } : {}),
       ...(process.env.NODE_ENV === "development" ? {
         debug: {
           matchedRecords: [
@@ -255,12 +296,14 @@ export async function POST(request: Request) {
       return NextResponse.json({
         error: { code: publicCode, message: publicMessage },
         sources: unavailableSources(mapboxAvailable, publicMessage),
+        ...(exposeTimings() ? { timings: collector.snapshot(performance.now() - requestStartedAt) } : {}),
       }, { status: error.status });
     }
     return NextResponse.json(
       {
         error: { code: "ANALYSIS_FAILED", message: "Live route analysis is currently unavailable" },
         sources: unavailableSources(mapboxAvailable, "Mapbox route analysis failed"),
+        ...(exposeTimings() ? { timings: collector.snapshot(performance.now() - requestStartedAt) } : {}),
       },
       { status: 502 },
     );

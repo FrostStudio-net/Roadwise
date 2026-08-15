@@ -1,5 +1,7 @@
 import "server-only";
 
+import { unstable_cache } from "next/cache";
+
 import { ServiceError } from "@/services/http";
 import { developmentError } from "@/lib/server-log";
 import type { DestinationSuggestion, GeocodedPlace, MapboxRoute } from "@/types/analysis";
@@ -206,7 +208,7 @@ export async function retrieveIcelandDestination(mapboxId: string, sessionToken:
   };
 }
 
-export async function geocodeIceland(query: string): Promise<GeocodedPlace> {
+async function geocodeIcelandUncached(query: string): Promise<GeocodedPlace> {
   const trimmed = query.trim();
   if (!trimmed) throw new ServiceError("Location is required", "INVALID_LOCATION", 400);
   const url = new URL("https://api.mapbox.com/search/geocode/v6/forward");
@@ -236,7 +238,19 @@ export async function geocodeIceland(query: string): Promise<GeocodedPlace> {
   };
 }
 
-export async function getDrivingRoute(origin: Coordinates, destination: Coordinates): Promise<MapboxRoute> {
+const geocodeIcelandCached = unstable_cache(
+  geocodeIcelandUncached,
+  ["mapbox-geocode-iceland-v1"],
+  { revalidate: 86_400 },
+);
+
+export async function geocodeIceland(query: string): Promise<GeocodedPlace> {
+  const trimmed = query.trim().normalize("NFC");
+  if (!trimmed) throw new ServiceError("Location is required", "INVALID_LOCATION", 400);
+  return geocodeIcelandCached(trimmed);
+}
+
+async function getDrivingRouteUncached(origin: Coordinates, destination: Coordinates): Promise<MapboxRoute> {
   const coordinatePath = `${origin.join(",")};${destination.join(",")}`;
   const url = new URL(`https://api.mapbox.com/directions/v5/mapbox/driving/${coordinatePath}`);
   url.searchParams.set("access_token", getToken());
@@ -255,4 +269,14 @@ export async function getDrivingRoute(origin: Coordinates, destination: Coordina
     throw new ServiceError("Mapbox returned no driveable route", "ROUTE_NOT_FOUND", 400);
   }
   return { geometry: { type: "LineString", coordinates: routeCoordinates }, distanceMeters, durationSeconds };
+}
+
+const getDrivingRouteCached = unstable_cache(
+  getDrivingRouteUncached,
+  ["mapbox-driving-route-v1"],
+  { revalidate: 300 },
+);
+
+export function getDrivingRoute(origin: Coordinates, destination: Coordinates): Promise<MapboxRoute> {
+  return getDrivingRouteCached(origin, destination);
 }

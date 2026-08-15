@@ -159,6 +159,7 @@ export type FeedResult<T> = {
 };
 
 export type IrcaDataset = {
+  snapshotId: string;
   roadConditions: FeedResult<RoadCondition[]>;
   incidents: FeedResult<RoadIncident[]>;
   measurements: FeedResult<RoadsideMeasurement[]>;

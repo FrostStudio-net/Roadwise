@@ -1,4 +1,7 @@
-import { distance, length, lineString, nearestPointOnLine, point } from "@turf/turf";
+import distance from "@turf/distance";
+import { lineString, point } from "@turf/helpers";
+import length from "@turf/length";
+import nearestPointOnLine from "@turf/nearest-point-on-line";
 
 import type { RouteWarning } from "@/types/analysis";
 import type { Coordinates, GeoJsonLineString } from "@/types/road";

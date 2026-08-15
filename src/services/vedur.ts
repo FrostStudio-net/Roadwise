@@ -1,3 +1,5 @@
+import { unstable_cache } from "next/cache";
+
 import { fetchOfficialFeed, unavailableFeed } from "@/services/http";
 import { developmentError } from "@/lib/server-log";
 import type { Coordinates, FeedResult, GeoJsonPolygon, ImoWarning } from "@/types/road";
@@ -63,19 +65,23 @@ function parseWarning(value: unknown): ImoWarning | undefined {
   };
 }
 
+const getActiveWarningsCached = unstable_cache(async (): Promise<FeedResult<ImoWarning[]>> => {
+  const raw = await fetchOfficialFeed(WARNINGS_URL, 300, "application/json");
+  if (raw.response.status === 204 || raw.text === "") {
+    return { available: true, data: [], updatedAt: raw.updatedAt };
+  }
+  const parsed: unknown = JSON.parse(raw.text);
+  if (!Array.isArray(parsed)) throw new Error("Unexpected IMO warning response");
+  return {
+    available: true,
+    data: parsed.map(parseWarning).filter((warning): warning is ImoWarning => Boolean(warning)),
+    updatedAt: raw.updatedAt,
+  };
+}, ["imo-active-warnings-v1"], { revalidate: 300 });
+
 export async function getActiveWarnings(): Promise<FeedResult<ImoWarning[]>> {
   try {
-    const raw = await fetchOfficialFeed(WARNINGS_URL, 300, "application/json");
-    if (raw.response.status === 204 || raw.text === "") {
-      return { available: true, data: [], updatedAt: raw.updatedAt };
-    }
-    const parsed: unknown = JSON.parse(raw.text);
-    if (!Array.isArray(parsed)) throw new Error("Unexpected IMO warning response");
-    return {
-      available: true,
-      data: parsed.map(parseWarning).filter((warning): warning is ImoWarning => Boolean(warning)),
-      updatedAt: raw.updatedAt,
-    };
+    return await getActiveWarningsCached();
   } catch (error) {
     developmentError("imo:warnings", error);
     return unavailableFeed([], "IMO warnings are unavailable");
