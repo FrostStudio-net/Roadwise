@@ -110,6 +110,19 @@ button:focus-visible, a:focus-visible {
     calc(100% - (var(--app-gutter) * 2)),
     calc(var(--app-width) - (var(--app-gutter) * 2))
   );
+  transition: opacity 180ms ease, transform 220ms ease;
+  will-change: opacity, transform;
+}
+
+.bottom-nav[data-interaction-hidden="true"] {
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, calc(100% + var(--roadwise-bottom-nav-offset) + 16px));
+}
+
+.roadwise-focus-scroll {
+  scroll-margin-block-start: 24px;
+  scroll-margin-block-end: calc(var(--roadwise-bottom-clearance) + 24px);
 }
 
 .glass {

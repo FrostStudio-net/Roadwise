@@ -18,6 +18,7 @@ export default function HomePage() {
   const [vehicle, setVehicle] = useState<VehicleType>("Small car (2WD)");
   const [checking, setChecking] = useState(false);
   const [navigationError, setNavigationError] = useState<string>();
+  const [destinationInteractionActive, setDestinationInteractionActive] = useState(false);
   const navigationPending = useRef(false);
 
   function navigateToCheck(place?: GeocodedPlace) {
@@ -81,7 +82,7 @@ export default function HomePage() {
 
         <section className="section-block-lg">
           <div className="mb-3 flex items-end justify-between"><div><div className="eyebrow">Plan ahead</div><h2 className="mt-1 text-lg font-semibold tracking-[-0.025em]">Where to?</h2></div><span className="text-[10px] text-[#7f8c89]">From Reykjavík</span></div>
-          <DestinationAutocomplete value={destination} onValueChange={(value) => { setDestination(value); setSelectedDestination(undefined); setNavigationError(undefined); clearDestinationSelection(); }} onSelect={(place) => { setDestination(place.name); setSelectedDestination(place); storeDestinationSelection(place); navigateToCheck(place); }} onSubmit={checkDrive} disabled={checking} error={navigationError} />
+          <DestinationAutocomplete value={destination} onValueChange={(value) => { setDestination(value); setSelectedDestination(undefined); setNavigationError(undefined); clearDestinationSelection(); }} onSelect={(place) => { setDestinationInteractionActive(false); setDestination(place.name); setSelectedDestination(place); storeDestinationSelection(place); navigateToCheck(place); }} onSubmit={checkDrive} disabled={checking} error={navigationError} onInteractionChange={setDestinationInteractionActive} />
           <button onClick={() => router.push(`/just-drive?vehicle=${encodeURIComponent(vehicle)}`)} className="glass mt-2 flex w-full items-center gap-3 rounded-[22px] px-4 py-3.5 text-left transition hover:bg-white/[.045]">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] bg-[#2d6b6b]/20 text-[#69a8a3]"><Navigation size={17} /></span>
             <span className="min-w-0 flex-1"><span className="block text-[13px] font-semibold">Just Drive</span><span className="mt-0.5 block text-[10px] text-[#7f8c89]">Monitor ahead without a destination</span></span>
@@ -101,7 +102,7 @@ export default function HomePage() {
 
         <div className="section-block"><VehicleSelector vehicle={vehicle} onChange={setVehicle} /></div>
       </main>
-      <BottomNav />
+      <BottomNav hidden={destinationInteractionActive} />
     </>
   );
 }

@@ -6,10 +6,16 @@ import { usePathname } from "next/navigation";
 
 const items = [{ label: "Home", href: "/", icon: Home }, { label: "Check", href: "/check", icon: Route }, { label: "Roads", href: "/roads", icon: Map }, { label: "Drive", href: "/drive", icon: ShieldAlert }];
 
-export default function BottomNav() {
+export default function BottomNav({ hidden = false }: { hidden?: boolean }) {
   const pathname = usePathname();
   return (
-    <nav aria-label="Main navigation" className="bottom-nav glass fixed left-1/2 z-50 -translate-x-1/2 rounded-[27px] p-1.5 shadow-2xl">
+    <nav
+      aria-label="Main navigation"
+      aria-hidden={hidden || undefined}
+      inert={hidden || undefined}
+      data-interaction-hidden={hidden ? "true" : "false"}
+      className="bottom-nav glass fixed left-1/2 z-50 -translate-x-1/2 rounded-[27px] p-1.5 shadow-2xl"
+    >
       <div className="grid grid-cols-4">
         {items.map(({ label, href, icon: Icon }) => {
           const active = pathname === href || (href === "/drive" && (pathname === "/just-drive" || pathname === "/emergency")) || (href === "/roads" && pathname === "/f-roads");

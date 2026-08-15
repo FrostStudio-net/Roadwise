@@ -67,7 +67,7 @@ export default function FRoadAssistantClient({ catalog, initialVehicle, sourceSt
               autoComplete="off"
               inputMode="text"
               placeholder="F208 or 208"
-              className="destination-input min-w-0 flex-1 border-0 bg-transparent text-[15px] text-[#f5f1eb] outline-none ring-0 placeholder:text-[#64716e] focus:border-transparent focus:outline-none focus:ring-0"
+              className="destination-input roadwise-focus-scroll min-w-0 flex-1 border-0 bg-transparent text-[15px] text-[#f5f1eb] outline-none ring-0 placeholder:text-[#64716e] focus:border-transparent focus:outline-none focus:ring-0"
             />
             <button type="submit" className="rounded-full bg-[#2d6b6b]/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-[.11em] text-[#a7cfca]">Check</button>
           </form>
@@ -98,7 +98,7 @@ export default function FRoadAssistantClient({ catalog, initialVehicle, sourceSt
         <section className="surface-panel section-block flex gap-3 p-4"><CheckCircle2 size={18} className="shrink-0 text-[#69a8a3]" /><div><div className="text-[10px] uppercase tracking-[.13em] text-[#8fbab5]">Source freshness</div><p className="mt-1 text-[11px] text-[#aab3b0]">{sourceStatus.updatedAt ? `Latest official feed response ${formatTime(sourceStatus.updatedAt)}.` : "Official update time unavailable."}</p>{sourceStatus.stale ? <p className="mt-1 text-[10px] text-[#d48c6b]">Source response may be stale. Confirm with Umferðin before driving.</p> : null}</div></section>
         <DataAttribution />
       </main>
-      <BottomNav />
+      <BottomNav hidden={focused} />
     </>
   );
 }
