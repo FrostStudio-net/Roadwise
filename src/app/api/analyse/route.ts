@@ -249,9 +249,12 @@ export async function POST(request: Request) {
   } catch (error) {
     developmentError("analyse", error);
     if (error instanceof ServiceError) {
+      const configurationFailure = error.code === "MAPBOX_TOKEN_MISSING";
+      const publicCode = configurationFailure ? "ROUTE_SEARCH_UNAVAILABLE" : error.code;
+      const publicMessage = configurationFailure ? "Route search is temporarily unavailable" : error.message;
       return NextResponse.json({
-        error: { code: error.code, message: error.message },
-        sources: unavailableSources(mapboxAvailable, error.message),
+        error: { code: publicCode, message: publicMessage },
+        sources: unavailableSources(mapboxAvailable, publicMessage),
       }, { status: error.status });
     }
     return NextResponse.json(

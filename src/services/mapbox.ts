@@ -1,3 +1,5 @@
+import "server-only";
+
 import { ServiceError } from "@/services/http";
 import { developmentError } from "@/lib/server-log";
 import type { DestinationSuggestion, GeocodedPlace, MapboxRoute } from "@/types/analysis";
@@ -9,9 +11,34 @@ const SEARCH_TYPES = "poi,place,city,locality,address,street";
 type UnknownRecord = Record<string, unknown>;
 type RankedGeocodedPlace = GeocodedPlace & { rank: number };
 
+let loggedMapboxConfiguration: boolean | undefined;
+
+export type MapboxEnvironmentStatus = {
+  mapboxConfigured: boolean;
+  mapboxTokenPrefix: "pk" | "sk" | null;
+  environment: string;
+};
+
+export function getMapboxEnvironmentStatus(): MapboxEnvironmentStatus {
+  const token = process.env.MAPBOX_ACCESS_TOKEN?.trim();
+  const mapboxConfigured = Boolean(token);
+  if (loggedMapboxConfiguration !== mapboxConfigured) {
+    console.info(`MAPBOX_ACCESS_TOKEN configured: ${mapboxConfigured}`);
+    loggedMapboxConfiguration = mapboxConfigured;
+  }
+  return {
+    mapboxConfigured,
+    mapboxTokenPrefix: token?.startsWith("pk.") ? "pk" : token?.startsWith("sk.") ? "sk" : null,
+    environment: process.env.NODE_ENV ?? "unknown",
+  };
+}
+
 function getToken(): string {
-  const token = process.env.MAPBOX_ACCESS_TOKEN;
-  if (!token) throw new ServiceError("MAPBOX_ACCESS_TOKEN is not configured", "MAPBOX_TOKEN_MISSING", 503);
+  const token = process.env.MAPBOX_ACCESS_TOKEN?.trim();
+  const { mapboxConfigured } = getMapboxEnvironmentStatus();
+  if (!mapboxConfigured || !token) {
+    throw new ServiceError("Route search is temporarily unavailable", "MAPBOX_TOKEN_MISSING", 503);
+  }
   return token;
 }
 
