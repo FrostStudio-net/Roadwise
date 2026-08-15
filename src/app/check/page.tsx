@@ -1,14 +1,16 @@
 "use client";
 
-import { ArrowUpRight, CloudOff, Map, Navigation, ShieldAlert } from "lucide-react";
+import { ArrowUpRight, CloudOff, Map, Navigation } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
 import BottomNav from "@/components/BottomNav";
 import AppHeader from "@/components/AppHeader";
 import DataAttribution from "@/components/DataAttribution";
+import RoadStatusIcon from "@/components/RoadStatusIcon";
 import VehicleSelector from "@/components/VehicleSelector";
 import { readDestinationSelection } from "@/lib/destination-selection-storage";
+import { ROAD_STATUS_STYLES } from "@/lib/road-status-style";
 import { clearRouteAnalysis, storeRouteAnalysis } from "@/lib/route-analysis-storage";
 import { VEHICLE_TYPES } from "@/types/analysis";
 import type { AnalyseRouteResponse, AnalysisDebugRecord, RouteWarning, VehicleType } from "@/types/analysis";
@@ -93,6 +95,7 @@ function CheckContent() {
   const route = result?.route;
   const analysis = result?.analysis;
   const roadDataUnavailable = analysis && !analysis.available;
+  const verdictStyle = analysis ? ROAD_STATUS_STYLES[analysis.level] : undefined;
 
   return (
     <>
@@ -121,9 +124,9 @@ function CheckContent() {
           </section>
         ) : (
           <>
-            <section className="glass card relative section-block overflow-hidden p-6">
-              <div className="topo-lines text-[#d48c6b]" />
-              <div className="relative flex items-start gap-4"><div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[21px] border border-[#d48c6b]/20 bg-[#d48c6b]/10 text-[#d48c6b]"><ShieldAlert size={27} strokeWidth={1.5} /></div><div><div className="eyebrow">Official-data verdict</div><h2 className="mt-2 text-[23px] font-semibold leading-tight tracking-[-.035em] text-[#e8c4b0]">{analysis.title}</h2></div></div>
+            <section className={`glass card relative section-block overflow-hidden p-6 ${verdictStyle?.cardClass ?? ""}`}>
+              <div className={`topo-lines ${verdictStyle?.accentClass ?? ""}`} />
+              <div className="relative flex items-start gap-4"><div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-[21px] border ${verdictStyle?.iconClass ?? ""}`}><RoadStatusIcon level={analysis.level} /></div><div><div className="eyebrow">Official-data verdict</div><h2 className={`mt-2 text-[23px] font-semibold leading-tight tracking-[-.035em] ${verdictStyle?.headingClass ?? ""}`}>{analysis.title}</h2></div></div>
               <p className="relative mt-5 max-w-[350px] text-[13px] leading-6 text-[#a5afac]">{analysis.summary}</p>
             </section>
 

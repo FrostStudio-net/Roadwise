@@ -9,6 +9,7 @@ import AppHeader from "@/components/AppHeader";
 import DataAttribution from "@/components/DataAttribution";
 import VehicleSelector from "@/components/VehicleSelector";
 import { findFRoad, getVehicleSuitability, normalizeFRoadQuery } from "@/lib/f-road";
+import { ROAD_STATUS_STYLES } from "@/lib/road-status-style";
 import type { VehicleType } from "@/types/analysis";
 import type { FRoadEntry, FRoadSectionSummary, FRoadSourceStatus } from "@/types/f-road";
 
@@ -122,7 +123,7 @@ export default function FRoadAssistantClient({ catalog, initialVehicle, sourceSt
 }
 
 function SectionRow({ section }: { section: FRoadSectionSummary }) {
-  const color = { open: "text-[#34d399]", caution: "text-[#e8c4b0]", difficult: "text-[#d48c6b]", closed: "text-[#ef8e76]", unknown: "text-[#82908d]" }[section.status];
+  const color = section.status === "unknown" ? "text-[#82908d]" : ROAD_STATUS_STYLES[section.status === "open" ? "normal" : section.status].headingClass;
   return <div className="surface-row px-2 py-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="text-[12px] font-semibold">{section.name}</div>{section.description ? <p className="mt-1 text-[10px] leading-4 text-[#82908d]">{section.description}</p> : section.status === "unknown" ? <p className="mt-1 text-[10px] text-[#82908d]">Official condition unavailable for this section.</p> : null}</div><span className={`shrink-0 rounded-full bg-white/[.04] px-2.5 py-1.5 text-[9px] font-semibold uppercase tracking-[.08em] ${color}`}>{section.statusLabel}</span></div>{section.stale ? <p className="mt-2 text-[9px] uppercase tracking-[.1em] text-[#d48c6b]">Stale condition record</p> : null}</div>;
 }
 

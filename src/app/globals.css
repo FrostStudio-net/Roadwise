@@ -160,6 +160,23 @@ button:focus-visible, a:focus-visible {
   backdrop-filter: blur(24px) saturate(1.4);
 }
 
+.verdict-card-normal {
+  border-color: rgba(52, 211, 153, 0.15);
+  background: linear-gradient(145deg, rgba(52, 211, 153, 0.055), rgba(255, 252, 248, 0.02));
+  box-shadow: 0 22px 55px rgba(0, 0, 0, 0.24), 0 0 32px rgba(52, 211, 153, 0.055), inset 0 1px 0 rgba(255, 255, 255, 0.055);
+}
+
+.verdict-card-difficult {
+  border-color: rgba(212, 140, 107, 0.2);
+  background: linear-gradient(145deg, rgba(122, 59, 46, 0.11), rgba(255, 252, 248, 0.02));
+}
+
+.verdict-card-closed {
+  border-color: rgba(239, 142, 118, 0.25);
+  background: linear-gradient(145deg, rgba(122, 59, 46, 0.18), rgba(255, 252, 248, 0.018));
+  box-shadow: 0 22px 55px rgba(0, 0, 0, 0.24), 0 0 34px rgba(239, 142, 118, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.055);
+}
+
 .roadwise-focus-shell:focus-within {
   border-color: rgba(74, 143, 143, 0.6);
   background: linear-gradient(145deg, rgba(45, 107, 107, 0.14), rgba(255, 252, 248, 0.035));

@@ -24,6 +24,7 @@ import MapDiagnosticStatus from "@/components/MapDiagnosticStatus";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { developmentMapError, initialMapDiagnostics, mapCanvasSize, mapContainerHasSize, observeMapSize, publicMapboxToken, ROADWISE_MAP_STYLE, sanitizeMapError } from "@/lib/client-map";
 import { matchRoadSectionDetails, ROAD_MAP_DEFAULT_VIEW, roadMapStatusLabel } from "@/lib/road-map";
+import { ROAD_STATUS_STYLES } from "@/lib/road-status-style";
 import type { RoadMapCamera, RoadMapFilter, RoadMapIncident, RoadMapObservation, RoadMapPayload, RoadMapSection } from "@/types/road-map";
 
 type Selection =
@@ -342,7 +343,7 @@ function DetailBlock({ title, children }: { title: string; children: React.React
 function SafetyCopy() { return <p className="mt-5 text-[10px] leading-5 text-[#82908d]">Roadwise reports available official information and never determines that a road is safe.</p>; }
 function MapFallback({ diagnostics }: { diagnostics: ReturnType<typeof initialMapDiagnostics> }) { return <div className="relative z-20 flex min-h-[168px] items-center justify-center bg-[#0d1515] p-5 text-center"><div className="w-full max-w-[330px]"><CloudOff size={23} className="mx-auto text-[#d48c6b]" /><div className="mt-2 text-[13px] font-semibold">Map unavailable</div><p className="mt-1 text-[10px] leading-5 text-[#82908d]">Official road information is still available below.</p><MapDiagnosticStatus status={diagnostics} /></div></div>; }
 function Legend({ color, label }: { color: string; label: string }) { return <div className="glass flex w-fit items-center gap-2 rounded-full bg-[#101818]/85 px-2.5 py-1.5 text-[8px] text-[#b4bdb9]"><span className="h-1.5 w-4 rounded-full" style={{ backgroundColor: color }} />{label}</div>; }
-function StatusDot({ status }: { status: RoadMapSection["status"] }) { const colors = { closed: "bg-[#ef8e76]", difficult: "bg-[#d48c6b]", caution: "bg-[#e8c4b0]", normal: "bg-[#4d8f8a]", unknown: "bg-[#74817e]" }; return <span className={`h-3 w-3 shrink-0 rounded-full ${colors[status]}`} />; }
+function StatusDot({ status }: { status: RoadMapSection["status"] }) { const color = status === "unknown" ? "bg-[#74817e]" : ROAD_STATUS_STYLES[status].dotClass; return <span className={`h-3 w-3 shrink-0 rounded-full ${color}`} />; }
 function roadLabel(section: RoadMapSection) { return section.roadNumbers.length ? section.roadNumbers.join(" · ") : section.name ?? "Official road section"; }
 function statusRank(status: RoadMapSection["status"]) { return { unknown: 0, normal: 1, caution: 2, difficult: 3, closed: 4 }[status]; }
 function humanState(value: string) { return value.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (letter) => letter.toUpperCase()); }
