@@ -21,6 +21,8 @@ describe("client map diagnostics", () => {
       tokenConfigured: true,
       containerWidth: 0,
       containerHeight: 0,
+      canvasWidth: 0,
+      canvasHeight: 0,
       mapCreated: false,
       styleLoaded: false,
       mapLoaded: false,

@@ -4,6 +4,9 @@ export type MapDiagnosticState = {
   tokenConfigured: boolean;
   containerWidth: number;
   containerHeight: number;
+  canvasWidth: number;
+  canvasHeight: number;
+  webglSupported?: boolean;
   mapCreated: boolean;
   styleLoaded: boolean;
   mapLoaded: boolean;
@@ -12,7 +15,13 @@ export type MapDiagnosticState = {
 };
 
 export function initialMapDiagnostics(tokenConfigured: boolean): MapDiagnosticState {
-  return { tokenConfigured, containerWidth: 0, containerHeight: 0, mapCreated: false, styleLoaded: false, mapLoaded: false };
+  return { tokenConfigured, containerWidth: 0, containerHeight: 0, canvasWidth: 0, canvasHeight: 0, mapCreated: false, styleLoaded: false, mapLoaded: false };
+}
+
+export const ROADWISE_MAP_STYLE = "mapbox://styles/mapbox/dark-v11";
+
+export function publicMapboxToken(): string | undefined {
+  return process.env.NEXT_PUBLIC_MAPBOX_TOKEN?.trim() || undefined;
 }
 
 export function developmentMapError(scope: "fuel" | "roads", stage: string, error?: unknown) {
@@ -40,11 +49,20 @@ export function mapContainerHasSize(container: HTMLElement): boolean {
   return rect.width > 0 && rect.height > 0;
 }
 
-export function observeMapSize(map: MapboxMap, container: HTMLElement): () => void {
-  let frame = window.requestAnimationFrame(() => map.resize());
+export function mapCanvasSize(map: MapboxMap): { canvasWidth: number; canvasHeight: number } {
+  const canvas = map.getCanvas();
+  return { canvasWidth: canvas.width, canvasHeight: canvas.height };
+}
+
+export function observeMapSize(map: MapboxMap, container: HTMLElement, onResize?: (size: { canvasWidth: number; canvasHeight: number }) => void): () => void {
+  const resizeMap = () => {
+    map.resize();
+    onResize?.(mapCanvasSize(map));
+  };
+  let frame = window.requestAnimationFrame(resizeMap);
   const resize = () => {
     window.cancelAnimationFrame(frame);
-    frame = window.requestAnimationFrame(() => map.resize());
+    frame = window.requestAnimationFrame(resizeMap);
   };
   const observer = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(resize);
   observer?.observe(container);

@@ -207,7 +207,28 @@ button:focus-visible, a:focus-visible {
   background-size: 160px 160px, 190px 190px, auto;
 }
 
-.mapboxgl-map { font: inherit; }
+.roadwise-map-frame {
+  border: 1px solid var(--border);
+  background: #0d1515;
+  box-shadow: 0 22px 55px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.055);
+}
+
+.roadwise-map-canvas,
+.roadwise-map-canvas.mapboxgl-map,
+.roadwise-map-canvas .mapboxgl-canvas-container,
+.roadwise-map-canvas .mapboxgl-canvas {
+  visibility: visible;
+  opacity: 1;
+}
+
+.roadwise-map-canvas.mapboxgl-map {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  font: inherit;
+}
+.roadwise-map-canvas .mapboxgl-canvas { display: block; }
 .mapboxgl-ctrl-attrib { border-radius: 10px 0 0; background: rgba(10, 15, 15, .78) !important; color: #9ca7a4; }
 .mapboxgl-ctrl-attrib a { color: #b9c3c0; }
 .eyebrow {
