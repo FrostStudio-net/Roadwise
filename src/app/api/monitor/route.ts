@@ -28,14 +28,10 @@ export async function POST(request: Request) {
       incidents: irca.incidents.data,
       measurements: irca.measurements.data,
     });
-    const updatedAt = latestDate([
-      irca.roadConditions.updatedAt,
-      irca.incidents.updatedAt,
-      irca.measurements.updatedAt,
-    ]);
+    const updatedAt = irca.roadConditions.updatedAt;
     const ageMinutes = sourceAgeMinutes(updatedAt);
     const staleAfterMinutes = RISK_THRESHOLDS.freshness.roadDataStaleAfterMinutes;
-    const available = irca.roadConditions.available;
+    const available = irca.roadConditions.available && irca.sections.available;
 
     const response: MonitorResponse = {
       vehicle: value.vehicle,
@@ -44,6 +40,7 @@ export async function POST(request: Request) {
       source: {
         available,
         roadConditions: irca.roadConditions.available,
+        sectionGeometry: irca.sections.available,
         incidents: irca.incidents.available,
         measurements: irca.measurements.available,
         updatedAt,
@@ -76,12 +73,6 @@ function finiteInRange(value: unknown, minimum: number, maximum: number): value 
   return typeof value === "number" && Number.isFinite(value) && value >= minimum && value <= maximum;
 }
 
-function latestDate(values: Array<string | undefined>): string | undefined {
-  return values
-    .filter((value): value is string => Boolean(value) && !Number.isNaN(Date.parse(value as string)))
-    .sort((left, right) => Date.parse(right) - Date.parse(left))[0];
-}
-
 function sourceAgeMinutes(value?: string): number | undefined {
   if (!value || Number.isNaN(Date.parse(value))) return undefined;
   return Math.max(0, Math.round((Date.now() - Date.parse(value)) / 60_000));
@@ -89,6 +80,7 @@ function sourceAgeMinutes(value?: string): number | undefined {
 
 function sourceError(irca: Awaited<ReturnType<typeof getIrcaData>>): string | null {
   if (!irca.roadConditions.available) return "IRCA road conditions are unavailable";
+  if (!irca.sections.available) return "IRCA section geometry is unavailable";
   const unavailable = [
     !irca.incidents.available ? "incidents" : undefined,
     !irca.measurements.available ? "measurements" : undefined,

@@ -20,6 +20,7 @@ export type MonitorResponse = {
   source: {
     available: boolean;
     roadConditions: boolean;
+    sectionGeometry: boolean;
     incidents: boolean;
     measurements: boolean;
     updatedAt?: string;

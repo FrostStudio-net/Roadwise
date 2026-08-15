@@ -30,6 +30,16 @@ export function normalizeRoadMapStatus(state: RoadConditionState): RoadMapStatus
   return "unknown";
 }
 
+export function roadMapStatusLabel(status: RoadMapStatus): string {
+  return {
+    normal: "Normal conditions reported",
+    caution: "Use caution",
+    difficult: "Difficult conditions",
+    closed: "Road closed",
+    unknown: "Unknown",
+  }[status];
+}
+
 export function simplifyRoadGeometry(geometry: MatchedLinearGeometry): MatchedLinearGeometry {
   if (geometry.type === "LineString") return { type: "LineString", coordinates: simplifyLine(geometry.coordinates) };
   return { type: "MultiLineString", coordinates: geometry.coordinates.map(simplifyLine).filter((line) => line.length >= 2) };

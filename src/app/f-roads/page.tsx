@@ -16,12 +16,7 @@ export default async function FRoadsPage({ searchParams }: {
   const initialVehicle = requested && VEHICLE_TYPES.includes(requested as VehicleType)
     ? requested as VehicleType
     : "Small car (2WD)";
-  const updatedAt = latestDate([
-    irca.sections.updatedAt,
-    irca.roadConditions.updatedAt,
-    irca.incidents.updatedAt,
-    cameras.updatedAt,
-  ]);
+  const updatedAt = irca.roadConditions.updatedAt;
   const sourceStatus: FRoadSourceStatus = {
     sectionsAvailable: irca.sections.available,
     conditionsAvailable: irca.roadConditions.available,
@@ -38,10 +33,4 @@ export default async function FRoadsPage({ searchParams }: {
   });
 
   return <FRoadAssistantClient catalog={catalog} initialVehicle={initialVehicle} sourceStatus={sourceStatus} />;
-}
-
-function latestDate(values: Array<string | undefined>): string | undefined {
-  return values
-    .filter((value): value is string => Boolean(value) && !Number.isNaN(Date.parse(value as string)))
-    .sort((a, b) => Date.parse(b) - Date.parse(a))[0];
 }

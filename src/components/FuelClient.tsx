@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { GeoJSONSource, Map as MapboxMap, MapLayerMouseEvent, Marker } from "mapbox-gl";
 
 import BottomNav from "@/components/BottomNav";
-import Logo from "@/components/Logo";
+import AppHeader from "@/components/AppHeader";
 import VehicleSelector from "@/components/VehicleSelector";
 import { detectLongServiceGaps, filterServicePois, matchServicePoisToRoute, nearestServicePois, routeProgressAt } from "@/lib/fuel-services";
 import { readRouteAnalysis } from "@/lib/route-analysis-storage";
@@ -131,7 +131,7 @@ export default function FuelClient({ initialSnapshot, initialVehicle, mapConfigu
     }, (error) => setLocationStatus(error.code === error.PERMISSION_DENIED ? "Location permission was denied." : "Your location could not be found."), { enableHighAccuracy: true, maximumAge: 10_000, timeout: 15_000 });
   }
 
-  return <><main className="page-shell"><Logo /><header className="section-block-lg"><div className="eyebrow">Fuel / EV</div><h1 className="mt-2 text-[32px] font-semibold tracking-[-0.05em]">Useful stops, without guesswork.</h1><p className="mt-3 max-w-[390px] text-[13px] leading-6 text-[#95a19e]">Find Roadwise-listed fuel stations and EV chargers nearby or close to your last checked route.</p></header>
+  return <><main className="page-shell"><AppHeader title="Fuel / EV" subtitle="Roadwise-listed service stops" /><p className="mt-4 max-w-[410px] text-[12px] leading-5 text-[#95a19e]">Find fuel stations and EV chargers nearby or close to your last checked route.</p>
 
     {!initialSnapshot.available ? <section className="surface-panel section-block flex gap-3 p-4"><CloudOff size={20} className="shrink-0 text-[#d48c6b]" /><div><div className="text-[13px] font-semibold">Service-stop data unavailable</div><p className="mt-1 text-[11px] leading-5 text-[#8e9b98]">{initialSnapshot.error ?? "OpenStreetMap fuel and charging data could not be loaded."} No substitute stations are shown.</p></div></section> : null}
 
@@ -144,7 +144,7 @@ export default function FuelClient({ initialSnapshot, initialVehicle, mapConfigu
 
     {mode === "route" && storedRoute ? <RouteSummary type={summaryType} matches={summaryMatches} gaps={longGaps} /> : null}
 
-    <section className="section-block"><div className="glass relative h-[min(52dvh,470px)] min-h-[350px] overflow-hidden rounded-[28px]"><div ref={mapContainer} className="absolute inset-0" />{!mapConfigured || mapError || !initialSnapshot.available ? <div className="absolute inset-0 z-10 flex items-center justify-center bg-[radial-gradient(circle_at_50%_42%,rgba(45,107,107,.22),#0d1515_68%)] p-8 text-center"><div><CloudOff size={25} className="mx-auto text-[#d48c6b]" /><div className="mt-3 text-[13px] font-semibold">Map unavailable</div><p className="mt-2 text-[10px] leading-5 text-[#82908d]">{mapError ?? (!mapConfigured ? "A restricted public Mapbox token is required. The list remains available." : "Service-stop data is unavailable.")}</p></div></div> : null}{mapConfigured && initialSnapshot.available && !mapReady && !mapError ? <div className="absolute inset-0 flex items-center justify-center bg-[#0d1515]"><Navigation size={23} className="animate-pulse text-[#69a8a3]" /></div> : null}</div></section>
+    <section className="section-block"><div className="glass relative h-[min(52dvh,470px)] min-h-[350px] overflow-hidden rounded-[28px]" role="region" aria-label="Fuel and EV service map"><div ref={mapContainer} className="absolute inset-0" />{!mapConfigured || mapError || !initialSnapshot.available ? <div className="absolute inset-0 z-10 flex items-center justify-center bg-[radial-gradient(circle_at_50%_42%,rgba(45,107,107,.22),#0d1515_68%)] p-8 text-center"><div><CloudOff size={25} className="mx-auto text-[#d48c6b]" /><div className="mt-3 text-[13px] font-semibold">Map unavailable</div><p className="mt-2 text-[10px] leading-5 text-[#82908d]">{mapError ?? (!mapConfigured ? "A restricted public Mapbox token is required. The list remains available." : "Service-stop data is unavailable.")}</p></div></div> : null}{mapConfigured && initialSnapshot.available && !mapReady && !mapError ? <div className="absolute inset-0 flex items-center justify-center bg-[#0d1515]"><Navigation size={23} className="animate-pulse text-[#69a8a3]" /></div> : null}</div></section>
 
     <section className="section-block"><div className="mb-3 flex items-end justify-between"><div><div className="eyebrow">{mode === "nearby" ? "Nearby services" : "Driving order"}</div><h2 className="mt-1 text-[19px] font-semibold">{mode === "nearby" ? "Closest useful stops" : "Along your checked route"}</h2></div>{searchedPois.length ? <span className="text-[10px] text-[#82908d]">{searchedPois.length} listed</span> : null}</div><ServiceList mode={mode} hasLocation={Boolean(location)} hasRoute={Boolean(storedRoute)} sourceAvailable={initialSnapshot.available} pois={searchedPois} onSelect={setSelected} /></section>
 

@@ -14,7 +14,15 @@ type StoredRouteAnalysis = {
 };
 
 export function storeRouteAnalysis(analysis: AnalyseRouteResponse, now = Date.now(), storage = browserSessionStorage()): void {
-  if (!storage || !isValidRouteAnalysis(analysis)) return;
+  if (!storage) return;
+  if (!isValidRouteAnalysis(analysis)) {
+    try {
+      storage.removeItem(ROUTE_ANALYSIS_STORAGE_KEY);
+    } catch {
+      // Drive Mode will still reject the invalid value when it is read.
+    }
+    return;
+  }
   try {
     const compact: AnalyseRouteResponse = {
       ...analysis,
@@ -72,7 +80,7 @@ function isValidRouteAnalysis(value: unknown): value is AnalyseRouteResponse {
   const analysis = value.analysis;
   if (!isRecord(route) || !validPlace(route.origin) || !validPlace(route.destination)) return false;
   if (!positiveNumber(route.distanceKm) || !positiveNumber(route.durationMinutes) || !validGeometry(route.geometry)) return false;
-  if (!isRecord(analysis) || typeof analysis.available !== "boolean" || !Array.isArray(analysis.warnings)) return false;
+  if (!isRecord(analysis) || analysis.available !== true || !Array.isArray(analysis.warnings)) return false;
   return analysis.warnings.every((warning) => isRecord(warning)
     && nonEmptyString(warning.id)
     && nonEmptyString(warning.title)

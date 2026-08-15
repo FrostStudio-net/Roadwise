@@ -22,14 +22,10 @@ const getRoadMapPayloadCached = unstable_cache(async (): Promise<RoadMapPayload>
       weather: irca.measurements.available,
       cameras: cameras.available,
     },
-    updatedAt: latestDate([irca.roadConditions.updatedAt, irca.incidents.updatedAt, irca.measurements.updatedAt, cameras.updatedAt]),
+    updatedAt: irca.roadConditions.updatedAt,
   });
 }, ["road-map-payload-v2"], { revalidate: 300 });
 
 export function getRoadMapPayload(): Promise<RoadMapPayload> {
   return getRoadMapPayloadCached();
-}
-
-function latestDate(values: Array<string | undefined>): string | undefined {
-  return values.filter((value): value is string => Boolean(value) && !Number.isNaN(Date.parse(value as string))).sort((a, b) => Date.parse(b) - Date.parse(a))[0];
 }

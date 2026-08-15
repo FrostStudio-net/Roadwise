@@ -5,8 +5,8 @@ import { AlertTriangle, Camera, CheckCircle2, ChevronRight, CloudOff, MountainSn
 import { useMemo, useState } from "react";
 
 import BottomNav from "@/components/BottomNav";
+import AppHeader from "@/components/AppHeader";
 import DataAttribution from "@/components/DataAttribution";
-import Logo from "@/components/Logo";
 import VehicleSelector from "@/components/VehicleSelector";
 import { findFRoad, getVehicleSuitability, normalizeFRoadQuery } from "@/lib/f-road";
 import type { VehicleType } from "@/types/analysis";
@@ -20,6 +20,7 @@ export default function FRoadAssistantClient({ catalog, initialVehicle, sourceSt
   const [vehicle, setVehicle] = useState(initialVehicle);
   const [message, setMessage] = useState<string>();
   const [focused, setFocused] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const suggestions = useMemo(() => searchCatalog(catalog, query), [catalog, query]);
   const suitability = getVehicleSuitability(vehicle);
 
@@ -28,6 +29,7 @@ export default function FRoadAssistantClient({ catalog, initialVehicle, sourceSt
     setSelectedRoad(road);
     setMessage(undefined);
     setFocused(false);
+    setActiveIndex(-1);
   }
 
   function submit() {
@@ -42,12 +44,8 @@ export default function FRoadAssistantClient({ catalog, initialVehicle, sourceSt
   return (
     <>
       <main className="page-shell">
-        <Logo />
-        <header className="section-block-lg">
-          <div className="eyebrow">F-road assistant</div>
-          <h1 className="mt-2 text-[32px] font-semibold tracking-[-0.05em]">Highland roads, clearly.</h1>
-          <p className="mt-3 max-w-[390px] text-[13px] leading-6 text-[#95a19e]">Check official section conditions, incidents and nearby road cameras. Roadwise never guarantees that a road or river crossing is safe.</p>
-        </header>
+        <AppHeader title="F-road Assistant" subtitle="Official highland-road status" />
+        <p className="mt-4 max-w-[410px] text-[12px] leading-5 text-[#95a19e]">Check official sections, incidents and nearby cameras. Roadwise never guarantees that a road or river crossing is safe.</p>
 
         {!sourceStatus.sectionsAvailable ? <Unavailable text="Official F-road section data is unavailable. Road search cannot be completed right now." /> : null}
 
@@ -57,13 +55,33 @@ export default function FRoadAssistantClient({ catalog, initialVehicle, sourceSt
             <Search size={18} className="shrink-0 text-[#69a8a3]" />
             <input
               value={query}
-              onChange={(event) => { setQuery(event.target.value); setMessage(undefined); }}
+              onChange={(event) => { setQuery(event.target.value); setMessage(undefined); setActiveIndex(-1); }}
               onFocus={() => setFocused(true)}
-              onBlur={() => window.setTimeout(() => setFocused(false), 120)}
+              onBlur={() => setFocused(false)}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowDown" && suggestions.length > 0) {
+                  event.preventDefault();
+                  setFocused(true);
+                  setActiveIndex((index) => Math.min(suggestions.length - 1, index + 1));
+                } else if (event.key === "ArrowUp" && suggestions.length > 0) {
+                  event.preventDefault();
+                  setFocused(true);
+                  setActiveIndex((index) => Math.max(0, index - 1));
+                } else if (event.key === "Enter" && activeIndex >= 0) {
+                  event.preventDefault();
+                  selectRoad(suggestions[activeIndex]);
+                } else if (event.key === "Escape") {
+                  event.preventDefault();
+                  setFocused(false);
+                  setActiveIndex(-1);
+                }
+              }}
               role="combobox"
               aria-label="Search F-road"
+              aria-autocomplete="list"
               aria-expanded={focused && suggestions.length > 0}
               aria-controls="f-road-results"
+              aria-activedescendant={focused && activeIndex >= 0 ? `f-road-result-${activeIndex}` : undefined}
               autoComplete="off"
               inputMode="text"
               placeholder="F208 or 208"
@@ -73,7 +91,7 @@ export default function FRoadAssistantClient({ catalog, initialVehicle, sourceSt
           </form>
           {focused && query.trim() && suggestions.length > 0 ? (
             <div id="f-road-results" role="listbox" className="destination-suggestions glass absolute left-0 right-0 top-full z-[70] mt-2 overflow-y-auto rounded-[22px] bg-[#111a1a]/95 p-2 shadow-[0_24px_65px_rgba(0,0,0,.5)]">
-              {suggestions.map((road) => <button key={road.roadNumber} type="button" role="option" aria-selected={road.roadNumber === selectedRoad?.roadNumber} onMouseDown={(event) => event.preventDefault()} onClick={() => selectRoad(road)} className="flex min-h-14 w-full items-center gap-3 rounded-[16px] px-3 py-2 text-left outline-none hover:bg-white/[.05] focus:bg-white/[.06] focus:outline-none"><span className="flex h-9 w-9 items-center justify-center rounded-[13px] bg-[#2d6b6b]/20 text-[#69a8a3]"><MountainSnow size={17} /></span><span className="min-w-0 flex-1"><span className="block text-[13px] font-semibold">{road.roadNumber}</span><span className="block truncate text-[10px] text-[#82908d]">{road.name ?? `${road.sections.length} official section${road.sections.length === 1 ? "" : "s"}`}</span></span><ChevronRight size={15} className="text-[#64716e]" /></button>)}
+              {suggestions.map((road, index) => <button id={`f-road-result-${index}`} key={road.roadNumber} type="button" role="option" aria-selected={index === activeIndex} onMouseDown={(event) => event.preventDefault()} onPointerMove={() => setActiveIndex(index)} onClick={() => selectRoad(road)} className={`flex min-h-14 w-full items-center gap-3 rounded-[16px] px-3 py-2 text-left outline-none hover:bg-white/[.05] focus:bg-white/[.06] focus:outline-none ${index === activeIndex ? "bg-white/[.06]" : ""}`}><span className="flex h-9 w-9 items-center justify-center rounded-[13px] bg-[#2d6b6b]/20 text-[#69a8a3]"><MountainSnow size={17} /></span><span className="min-w-0 flex-1"><span className="block text-[13px] font-semibold">{road.roadNumber}</span><span className="block truncate text-[10px] text-[#82908d]">{road.name ?? `${road.sections.length} official section${road.sections.length === 1 ? "" : "s"}`}</span></span><ChevronRight size={15} className="text-[#64716e]" /></button>)}
             </div>
           ) : null}
           {message ? <p className="mt-3 text-[11px] leading-5 text-[#d9a184]">{message}</p> : null}
@@ -95,7 +113,7 @@ export default function FRoadAssistantClient({ catalog, initialVehicle, sourceSt
           </>
         ) : null}
 
-        <section className="surface-panel section-block flex gap-3 p-4"><CheckCircle2 size={18} className="shrink-0 text-[#69a8a3]" /><div><div className="text-[10px] uppercase tracking-[.13em] text-[#8fbab5]">Source freshness</div><p className="mt-1 text-[11px] text-[#aab3b0]">{sourceStatus.updatedAt ? `Latest official feed response ${formatTime(sourceStatus.updatedAt)}.` : "Official update time unavailable."}</p>{sourceStatus.stale ? <p className="mt-1 text-[10px] text-[#d48c6b]">Source response may be stale. Confirm with Umferðin before driving.</p> : null}</div></section>
+        <section className="surface-panel section-block flex gap-3 p-4"><CheckCircle2 size={18} className="shrink-0 text-[#69a8a3]" /><div><div className="text-[10px] uppercase tracking-[.13em] text-[#8fbab5]">Source freshness</div><p className="mt-1 text-[11px] text-[#aab3b0]">{sourceStatus.updatedAt ? `Official road-condition feed response ${formatTime(sourceStatus.updatedAt)}.` : "Official road-condition update time unavailable."}</p>{sourceStatus.stale ? <p className="mt-1 text-[10px] text-[#d48c6b]">Road-condition response may be stale. Confirm with Umferðin before driving.</p> : null}</div></section>
         <DataAttribution />
       </main>
       <BottomNav hidden={focused} />

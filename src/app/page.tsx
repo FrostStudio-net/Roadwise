@@ -62,7 +62,7 @@ export default function HomePage() {
         <header className="flex items-center justify-between">
           <Logo />
           <div className="flex items-center gap-2 rounded-full border border-[#34d399]/15 bg-[#34d399]/[0.06] px-3 py-2 text-[10px] font-medium text-[#75dfb4]">
-            <span className="breathing h-1.5 w-1.5 rounded-full bg-[#34d399]" /> Live
+            <span className="h-1.5 w-1.5 rounded-full bg-[#34d399]" /> Official sources
           </div>
         </header>
 
@@ -72,12 +72,10 @@ export default function HomePage() {
           <p className="mt-4 max-w-[340px] text-[13px] leading-6 text-[#95a19e]">Check a specific drive against current official road conditions, incidents and roadside measurements.</p>
         </section>
 
-        <section className="float-in-delay section-block grid grid-cols-2 gap-2.5" aria-label="Current conditions">
-          <ConditionCard icon={<Wind size={20} strokeWidth={1.6} />} label="Nearby wind" value="Not checked" note="Check a route for live data" tone="warning" featured />
-          <div className="grid gap-2.5">
-            <ConditionCard icon={<Navigation size={18} strokeWidth={1.6} />} label="Roads" value="Route only" tone="neutral" />
-            <ConditionCard icon={<ShieldAlert size={18} strokeWidth={1.6} />} label="Advisories" value="Not checked" tone="neutral" />
-          </div>
+        <section className="float-in-delay section-block grid grid-cols-3 gap-2" aria-label="Current conditions">
+          <ConditionCard icon={<Wind size={18} strokeWidth={1.6} />} label="Nearby wind" value="Not checked" note="After route check" tone="warning" />
+          <ConditionCard icon={<Navigation size={18} strokeWidth={1.6} />} label="Roads" value="Route only" tone="neutral" />
+          <ConditionCard icon={<ShieldAlert size={18} strokeWidth={1.6} />} label="Advisories" value="Not checked" tone="neutral" />
         </section>
 
         <section className="section-block-lg">
@@ -92,8 +90,8 @@ export default function HomePage() {
 
         <section className="section-block">
           <div className="eyebrow mb-3">Useful out here</div>
-          <div className="stagger-grid grid grid-cols-2 gap-2.5">
-            <QuickButton icon={<Map size={20} />} label="Road map" note="Live conditions" onClick={() => router.push("/roads")} />
+          <div className="app-launcher-grid grid auto-rows-fr grid-cols-2 gap-2.5">
+            <QuickButton icon={<Map size={20} />} label="Road map" note="Official conditions" onClick={() => router.push("/roads")} />
             <QuickButton icon={<MountainSnow size={20} />} label="F-road assistant" note="Official section status" onClick={() => router.push(`/f-roads?vehicle=${encodeURIComponent(vehicle)}`)} />
             <QuickButton icon={<Fuel size={20} />} label="Fuel / EV" note="Nearby and along route" onClick={() => router.push(`/fuel?vehicle=${encodeURIComponent(vehicle)}`)} />
             <QuickButton icon={<ShieldAlert size={20} />} label="Emergency" note="112 Iceland" warning onClick={() => router.push("/emergency")} />

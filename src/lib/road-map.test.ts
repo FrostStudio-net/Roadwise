@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildRoadMapPayload, matchRoadSectionDetails, normalizeRoadMapStatus, ROAD_MAP_DEFAULT_VIEW, sectionVisibleForFilter, simplifyRoadGeometry } from "@/lib/road-map";
+import { buildRoadMapPayload, matchRoadSectionDetails, normalizeRoadMapStatus, ROAD_MAP_DEFAULT_VIEW, roadMapStatusLabel, sectionVisibleForFilter, simplifyRoadGeometry } from "@/lib/road-map";
 import type { RoadMapPayload } from "@/types/road-map";
 import type { RoadCondition, RoadSection } from "@/types/road";
 
@@ -22,6 +22,14 @@ describe("road map status normalization", () => {
     expect(normalizeRoadMapStatus("hazardous")).toBe("difficult");
     expect(normalizeRoadMapStatus("roadClosed")).toBe("closed");
     expect(normalizeRoadMapStatus("unknown")).toBe("unknown");
+  });
+
+  it("uses the shared safety status wording", () => {
+    expect(roadMapStatusLabel("normal")).toBe("Normal conditions reported");
+    expect(roadMapStatusLabel("caution")).toBe("Use caution");
+    expect(roadMapStatusLabel("difficult")).toBe("Difficult conditions");
+    expect(roadMapStatusLabel("closed")).toBe("Road closed");
+    expect(roadMapStatusLabel("unknown")).toBe("Unknown");
   });
 
   it("classifies a closure above another condition on the same section", () => {

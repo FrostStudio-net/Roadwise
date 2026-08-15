@@ -55,5 +55,6 @@ describe("risk engine", () => {
     });
     expect(analysis.warnings.map((warning) => warning.sourceRecordId)).toEqual(["closure", "works"]);
     expect(analysis.triggeredByWarningIds).toEqual(["condition-closure"]);
+    expect(analysis.title).toBe("Road closed");
   });
 });

@@ -10,7 +10,7 @@ import DriveEmptyState from "@/components/DriveEmptyState";
 import { useLiveLocation } from "@/hooks/use-live-location";
 import { useWarningAnnouncer } from "@/hooks/use-warning-announcer";
 import { calculateRouteProgress, upcomingWarnings } from "@/lib/route-progress";
-import { readRouteAnalysis } from "@/lib/route-analysis-storage";
+import { clearRouteAnalysis, readRouteAnalysis } from "@/lib/route-analysis-storage";
 import type { AnalyseRouteResponse } from "@/types/analysis";
 
 export default function DrivePage() {
@@ -50,6 +50,7 @@ export default function DrivePage() {
 
   function endDrive() {
     stop();
+    clearRouteAnalysis();
     setStarted(false);
     router.push("/");
   }
@@ -65,7 +66,7 @@ export default function DrivePage() {
 
     <div className="action-stack">{!started && <button disabled={!route} onClick={beginDrive} className="primary-button disabled:cursor-not-allowed disabled:opacity-40">Start Drive Mode <Play size={18} /></button>}<div className="grid grid-cols-2 gap-2.5"><button onClick={() => setMuted((value) => !value)} className="glass card flex items-center justify-center gap-2 py-4 text-[12px]">{muted ? <VolumeX size={17} className="text-[#d48c6b]" /> : <Volume2 size={17} className="text-[#69a8a3]" />}{muted ? "Unmute" : "Mute"}</button><button onClick={() => route && openMaps(route.origin.name, route.destination.name)} disabled={!route} className="glass card flex items-center justify-center gap-2 py-4 text-[12px] disabled:opacity-40"><Navigation size={17} className="text-[#69a8a3]" />Open Maps</button></div>{started && <button onClick={endDrive} className="glass flex w-full items-center justify-center gap-2 rounded-[22px] py-4 text-[12px] text-[#d8b09d]"><X size={16} />End drive</button>}</div>
 
-    <section className="surface-panel section-block p-4 text-[10px] leading-5 text-[#7f8c89]">Web prototype: background GPS and spoken warnings may pause when your phone is locked or another app is in the foreground.</section><DataAttribution includeImo /></main><BottomNav /></>;
+    <section className="surface-panel section-block p-4 text-[10px] leading-5 text-[#7f8c89]">Browser limitation: background GPS and spoken warnings may pause when your phone is locked or another app is in the foreground.</section><DataAttribution includeImo /></main><BottomNav /></>;
 }
 
 function DriveRestoreLoading() {

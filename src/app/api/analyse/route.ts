@@ -74,8 +74,8 @@ function coordinateLabel(coordinates: [number, number]): string {
 
 function ircaError(irca: Awaited<ReturnType<typeof getIrcaData>>): string | null {
   if (!irca.roadConditions.available) return "IRCA road conditions are unavailable";
+  if (!irca.sections.available) return "IRCA section geometry is unavailable";
   const optional = [
-    !irca.sections.available ? "section geometry" : undefined,
     !irca.incidents.available ? "incidents" : undefined,
     !irca.measurements.available ? "measurements" : undefined,
   ].filter((value): value is string => Boolean(value));
@@ -181,7 +181,7 @@ async function analyseRequest(request: Request, collector: RouteTimingCollector,
       "riskEngineMs",
       () => analyseRoute({ vehicle: body.vehicle, roadConditions, incidents, measurements, imoWarnings }),
     );
-    const coreRoadDataAvailable = irca.roadConditions.available;
+    const coreRoadDataAvailable = irca.roadConditions.available && irca.sections.available;
     const analysis = coreRoadDataAvailable
       ? computed
       : {
@@ -197,7 +197,7 @@ async function analyseRequest(request: Request, collector: RouteTimingCollector,
       });
     }
 
-    const roadDataUpdatedAt = latestDate([irca.roadConditions.updatedAt, irca.incidents.updatedAt]);
+    const roadDataUpdatedAt = irca.roadConditions.updatedAt;
     const roadDataAgeMinutes = ageMinutes(roadDataUpdatedAt);
 
     const response: AnalyseRouteResponse = {

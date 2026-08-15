@@ -21,7 +21,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import BottomNav from "@/components/BottomNav";
-import Logo from "@/components/Logo";
+import AppHeader from "@/components/AppHeader";
 import {
   createMapsLink,
   EMERGENCY_TELEPHONE_HREF,
@@ -140,16 +140,8 @@ export default function EmergencyClient() {
   return (
     <>
       <main className="page-shell">
-        <header className="flex items-center justify-between gap-4">
-          <Logo />
-          <div className="rounded-full border border-[#d48c6b]/25 bg-[#7a3b2e]/15 px-3 py-2 text-[10px] font-semibold uppercase tracking-[.11em] text-[#e8c4b0]">Iceland</div>
-        </header>
-
-        <section className="section-block-lg">
-          <div className="eyebrow">Emergency & breakdown</div>
-          <h1 className="mt-2 text-[32px] font-semibold tracking-[-0.05em]">Get help. Share where you are.</h1>
-          <p className="mt-3 max-w-[390px] text-[14px] leading-6 text-[#a6b0ad]">The call action and guidance below work without loading live road data.</p>
-        </section>
+        <AppHeader title="Emergency" subtitle="Emergency & breakdown · Iceland" />
+        <p className="mt-4 max-w-[410px] text-[13px] leading-5 text-[#a6b0ad]">Get help and share where you are. Calling and guidance work without live road data.</p>
 
         <a
           href={EMERGENCY_TELEPHONE_HREF}

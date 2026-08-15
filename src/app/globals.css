@@ -4,6 +4,10 @@
 :root {
   --app-width: 480px;
   --app-gutter: 18px;
+  --app-header-height: 52px;
+  --section-gap: 24px;
+  --card-radius: 24px;
+  --card-padding: 16px;
   --roadwise-nav-height: 72px;
   --roadwise-nav-bottom: 12px;
   --roadwise-nav-gap: 20px;
@@ -106,7 +110,25 @@ button:focus-visible, a:focus-visible {
   width: 100%;
   max-width: var(--app-width);
   margin: 0 auto;
-  padding: 24px var(--app-gutter) 0;
+  padding: calc(18px + env(safe-area-inset-top, 0px)) var(--app-gutter) 0;
+}
+
+.app-header {
+  display: flex;
+  min-height: var(--app-header-height);
+  align-items: center;
+  gap: 12px;
+}
+
+.app-header-button {
+  display: flex;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 17px;
+  color: #b5bfbc;
 }
 
 .bottom-nav {
@@ -147,7 +169,7 @@ button:focus-visible, a:focus-visible {
     inset 0 1px 0 rgba(232, 196, 176, 0.09);
 }
 
-.card { border-radius: 26px; }
+.card { border-radius: var(--card-radius); }
 
 .surface-panel,
 .surface-group {
@@ -167,12 +189,11 @@ button:focus-visible, a:focus-visible {
 
 .surface-row:last-child { border-bottom: 0; }
 
-.section-block { margin-top: 28px; }
-.section-block-lg { margin-top: 34px; }
+.section-block { margin-top: var(--section-gap); }
+.section-block-lg { margin-top: 30px; }
 .section-label { margin-bottom: 12px; }
 .action-stack { display: grid; gap: 10px; margin-top: 24px; }
-.stagger-grid { padding-bottom: 6px; }
-.stagger-grid > :nth-child(even) { transform: translateY(6px); }
+.app-launcher-grid > * { min-height: 108px; }
 
 .map-card {
   height: clamp(250px, 64vw, 286px);

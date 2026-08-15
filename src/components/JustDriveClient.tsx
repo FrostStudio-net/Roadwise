@@ -145,7 +145,7 @@ export default function JustDriveClient({ initialVehicle }: { initialVehicle: Ve
           </h1>
           <p className="mx-auto mt-4 max-w-[350px] text-[13px] leading-6 text-[#95a19e]">
             {started
-              ? "Live official road conditions and incidents, filtered around your direction of travel."
+              ? "Current official road conditions and incidents, filtered around your direction of travel."
               : "Roadwise monitors the road ahead even when you haven't planned a destination."}
           </p>
           <div className="mx-auto mt-7 h-px w-[72%] bg-gradient-to-r from-transparent via-[#69a8a3]/40 to-transparent" />
@@ -186,7 +186,7 @@ export default function JustDriveClient({ initialVehicle }: { initialVehicle: Ve
         </div>
 
         <section className="surface-panel section-block p-4 text-[10px] leading-5 text-[#7f8c89]">
-          Web prototype: background GPS, monitoring requests and spoken warnings may pause when your phone is locked or another app is in the foreground.
+          Browser limitation: background GPS, monitoring requests and spoken warnings may pause when your phone is locked or another app is in the foreground.
         </section>
         <DataAttribution />
       </main>
@@ -257,6 +257,7 @@ function MonitorCard({ started, status, accuracyMeters, checking, monitor, monit
           <div className="mt-1 text-[17px] font-semibold text-[#e8c4b0]">{title}</div>
           <div className="mt-1 text-[11px] leading-5 text-[#8e9b98]">{detail}</div>
           {monitor?.source.stale ? <div className="mt-2 text-[9px] uppercase tracking-[.08em] text-[#d9a68d]">Official source update is older than {monitor.source.staleAfterMinutes} minutes</div> : null}
+          {monitor?.source.available && monitor.source.error ? <div className="mt-2 text-[9px] leading-4 text-[#d9a68d]">Partial official data: {monitor.source.error}. Related hazards may be omitted.</div> : null}
         </div>
       </div>
     </section>

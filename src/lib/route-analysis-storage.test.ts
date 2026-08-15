@@ -75,4 +75,14 @@ describe("active checked-route storage", () => {
     expect(readRouteAnalysis(now, invalid)).toBeUndefined();
     expect(invalid.getItem(ROUTE_ANALYSIS_STORAGE_KEY)).toBeNull();
   });
+
+  it("rejects an unavailable analysis and removes an older active route", () => {
+    const storage = new MemoryStorage();
+    storeRouteAnalysis(routeAnalysis(), now, storage);
+    const unavailable = routeAnalysis();
+    unavailable.analysis.available = false;
+    storeRouteAnalysis(unavailable, now + 1_000, storage);
+    expect(storage.getItem(ROUTE_ANALYSIS_STORAGE_KEY)).toBeNull();
+    expect(readRouteAnalysis(now + 2_000, storage)).toBeUndefined();
+  });
 });

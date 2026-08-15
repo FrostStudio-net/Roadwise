@@ -1,14 +1,15 @@
 "use client";
 
-import { ArrowLeft, ArrowUpRight, CloudOff, Map, Navigation, ShieldAlert } from "lucide-react";
+import { ArrowUpRight, CloudOff, Map, Navigation, ShieldAlert } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
 import BottomNav from "@/components/BottomNav";
+import AppHeader from "@/components/AppHeader";
 import DataAttribution from "@/components/DataAttribution";
 import VehicleSelector from "@/components/VehicleSelector";
 import { readDestinationSelection } from "@/lib/destination-selection-storage";
-import { storeRouteAnalysis } from "@/lib/route-analysis-storage";
+import { clearRouteAnalysis, storeRouteAnalysis } from "@/lib/route-analysis-storage";
 import { VEHICLE_TYPES } from "@/types/analysis";
 import type { AnalyseRouteResponse, AnalysisDebugRecord, RouteWarning, VehicleType } from "@/types/analysis";
 
@@ -70,6 +71,7 @@ function CheckContent() {
   useEffect(() => {
     if (!destination) return;
     let active = true;
+    clearRouteAnalysis();
     requestAnalysis({ origin: "Reykjavík", destination, vehicle, destinationSelection: readDestinationSelection(destinationId) })
       .then((data) => {
         if (!active) return;
@@ -95,10 +97,7 @@ function CheckContent() {
   return (
     <>
       <main className="page-shell">
-        <header className="flex items-center justify-between">
-          <button onClick={() => router.back()} aria-label="Go back" className="glass flex h-11 w-11 items-center justify-center rounded-[17px] text-[#b5bfbc]"><ArrowLeft size={19} /></button>
-          <span className="eyebrow">Route check</span><span className="w-11" />
-        </header>
+        <AppHeader title="Drive Check" subtitle="Official route analysis" />
 
         <section className="section-block-lg">
           <div className="text-[12px] text-[#8e9b98]">From {route?.origin.name ?? "Reykjavík"}</div>
@@ -133,12 +132,13 @@ function CheckContent() {
             </div></section>
 
             <section className="surface-panel section-block flex items-center gap-3 border-[#34d399]/10 bg-[#34d399]/[0.035] p-4"><span className="breathing h-2 w-2 shrink-0 rounded-full bg-[#34d399]" /><div><div className="text-[10px] uppercase tracking-[.14em] text-[#70cba7]">Source freshness</div><div className="mt-1 text-[12px] text-[#a8b2af]">{formatRoadDataFreshness(result)}</div>{result.sources.roadDataStale && <div className="mt-1 text-[10px] text-[#d48c6b]">Road data may be stale. Confirm with official sources.</div>}</div></section>
+            {unavailableIrcaInputs(result).length > 0 && <div className="section-block px-1 text-[11px] leading-5 text-[#d9a184]">Partial official data: {unavailableIrcaInputs(result).join(", ")} unavailable. Related hazards may be omitted.</div>}
             {!result.sources.imo.available && <div className="section-block px-1 text-[11px] leading-5 text-[#8e9b98]">Weather warning data temporarily unavailable.</div>}
             {process.env.NODE_ENV === "development" && result.debug && <WhyResult analysis={analysis} records={result.debug.matchedRecords} />}
           </>
         )}
 
-        {route && <div className="action-stack"><button onClick={() => router.push("/drive")} className="primary-button">Open drive mode <ArrowUpRight size={19} /></button><button onClick={() => openMaps(route.origin.name, route.destination.name)} className="glass flex w-full items-center justify-center gap-2 rounded-[22px] px-5 py-[15px] text-[13px] text-[#c2cac7]"><Navigation size={16} className="text-[#d48c6b]" />Open in Maps</button></div>}
+        {route && <div className="action-stack">{analysis?.available ? <button onClick={() => router.push("/drive")} className="primary-button">Open drive mode <ArrowUpRight size={19} /></button> : null}<button onClick={() => openMaps(route.origin.name, route.destination.name)} className="glass flex w-full items-center justify-center gap-2 rounded-[22px] px-5 py-[15px] text-[13px] text-[#c2cac7]"><Navigation size={16} className="text-[#d48c6b]" />Open in Maps</button></div>}
         <div className="section-block"><VehicleSelector vehicle={vehicle} onChange={(value) => { setLoading(true); setRequestError(undefined); setVehicle(value); }} /></div>
         <DataAttribution includeImo />
       </main><BottomNav />
@@ -193,6 +193,14 @@ function formatRoadDataFreshness(result: AnalyseRouteResponse): string {
   return result.sources.roadDataUpdatedAt
     ? `Road data updated ${formatTimestamp(result.sources.roadDataUpdatedAt)}`
     : "Road data checked; update time unavailable";
+}
+
+function unavailableIrcaInputs(result: AnalyseRouteResponse): string[] {
+  return [
+    !result.sources.irca.sectionGeometry ? "section geometry" : undefined,
+    !result.sources.irca.incidents ? "incidents" : undefined,
+    !result.sources.irca.measurements ? "roadside measurements" : undefined,
+  ].filter((value): value is string => Boolean(value));
 }
 
 function WhyResult({ analysis, records }: { analysis: AnalyseRouteResponse["analysis"]; records: AnalysisDebugRecord[] }) {

@@ -18,9 +18,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { FilterSpecification, GeoJSONSource, Map as MapboxMap, MapLayerMouseEvent, Marker } from "mapbox-gl";
 
 import BottomNav from "@/components/BottomNav";
+import AppHeader from "@/components/AppHeader";
 import DataAttribution from "@/components/DataAttribution";
-import Logo from "@/components/Logo";
-import { matchRoadSectionDetails, ROAD_MAP_DEFAULT_VIEW } from "@/lib/road-map";
+import { matchRoadSectionDetails, ROAD_MAP_DEFAULT_VIEW, roadMapStatusLabel } from "@/lib/road-map";
 import type { RoadMapCamera, RoadMapFilter, RoadMapIncident, RoadMapObservation, RoadMapPayload, RoadMapSection } from "@/types/road-map";
 
 type Selection =
@@ -28,6 +28,7 @@ type Selection =
   | { kind: "incident"; item: RoadMapIncident }
   | { kind: "observation"; item: RoadMapObservation }
   | { kind: "camera"; item: RoadMapCamera };
+type AttentionFilter = "closed" | "difficult" | "incidents";
 
 const FILTERS: Array<{ id: RoadMapFilter; label: string }> = [
   { id: "all", label: "All" },
@@ -54,6 +55,8 @@ export default function RoadsClient({ initialData, mapConfigured }: { initialDat
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string>();
   const [locationStatus, setLocationStatus] = useState<string>();
+  const [attentionOpen, setAttentionOpen] = useState(false);
+  const [attentionFilter, setAttentionFilter] = useState<AttentionFilter>("closed");
 
   useEffect(() => {
     if (!mapConfigured || !mapContainer.current || mapRef.current) return;
@@ -134,35 +137,44 @@ export default function RoadsClient({ initialData, mapConfigured }: { initialDat
   const counts = useMemo(() => ({
     closures: initialData.sections.filter((section) => section.status === "closed").length,
     difficult: initialData.sections.filter((section) => section.status === "difficult" || section.status === "caution").length,
-  }), [initialData.sections]);
+    incidents: initialData.incidents.length,
+  }), [initialData.incidents.length, initialData.sections]);
+  const unavailableLayers = [
+    !initialData.sources.sections ? "road geometry" : undefined,
+    !initialData.sources.conditions ? "road conditions" : undefined,
+    !initialData.sources.incidents ? "incidents" : undefined,
+    !initialData.sources.weather ? "roadside observations" : undefined,
+    !initialData.sources.cameras ? "cameras" : undefined,
+  ].filter((value): value is string => Boolean(value));
 
   return (
     <>
       <main className="page-shell">
-        <Logo />
-        <header className="section-block-lg"><div className="eyebrow">Official road map</div><h1 className="mt-2 text-[32px] font-semibold tracking-[-0.05em]">Iceland, right now</h1><p className="mt-3 max-w-[390px] text-[13px] leading-6 text-[#95a19e]">Current official road sections, incidents, roadside observations and camera locations. Conditions can change quickly.</p></header>
+        <AppHeader title="Roads" subtitle="Official conditions across Iceland" />
+        <p className="mt-4 max-w-[410px] text-[12px] leading-5 text-[#95a19e]">Road sections, incidents, roadside observations and camera locations. Conditions can change quickly.</p>
 
-        <section className="section-block">
-          <div className="-mx-[var(--app-gutter)] overflow-x-auto px-[var(--app-gutter)] pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Map filters"><div className="flex w-max gap-2">{FILTERS.map(({ id, label }) => <button key={id} type="button" aria-pressed={filter === id} onClick={() => setFilter(id)} className={`min-h-11 rounded-full border px-4 text-[11px] font-semibold transition ${filter === id ? "border-[#69a8a3]/45 bg-[#2d6b6b]/35 text-[#d7e5e2]" : "border-white/[.08] bg-white/[.035] text-[#8f9c99]"}`}>{label}</button>)}</div></div>
+        <section className="mt-5">
+          <div className="grid grid-cols-3 gap-2" aria-label="Map filters">{FILTERS.map(({ id, label }) => <button key={id} type="button" aria-pressed={filter === id} onClick={() => setFilter(id)} className={`min-h-10 rounded-full border px-2 text-[10px] font-semibold transition ${filter === id ? "border-[#69a8a3]/45 bg-[#2d6b6b]/35 text-[#d7e5e2]" : "border-white/[.08] bg-white/[.035] text-[#8f9c99]"}`}>{label}</button>)}</div>
 
-          <div className="glass relative mt-2 h-[min(64dvh,570px)] min-h-[420px] overflow-hidden rounded-[28px] border-white/[.1]" aria-label="Interactive Iceland road-condition map">
+          <div className={`glass relative mt-3 overflow-hidden rounded-[28px] border-white/[.1] ${mapConfigured && !mapError ? "h-[min(58dvh,520px)] min-h-[390px]" : "h-[260px]"}`} role="region" aria-label="Interactive Iceland road-condition map">
             <div ref={mapContainer} className="absolute inset-0" />
             {!mapConfigured || mapError ? <MapFallback message={mapError ?? "Add a restricted NEXT_PUBLIC_MAPBOX_TOKEN to enable the interactive map."} /> : null}
-            {mapConfigured && !mapReady && !mapError ? <div className="absolute inset-0 flex items-center justify-center bg-[#0d1515]"><div className="text-center"><Navigation size={25} className="mx-auto animate-pulse text-[#69a8a3]" /><p className="mt-3 text-[12px] text-[#8e9b98]">Loading official road map…</p></div></div> : null}
+            {mapConfigured && !mapReady && !mapError ? <div className="absolute inset-0 flex items-center justify-center bg-[radial-gradient(circle_at_50%_42%,rgba(45,107,107,.18),#0d1515_70%)]"><div className="text-center"><Navigation size={25} className="mx-auto animate-pulse text-[#69a8a3]" /><p className="mt-3 text-[12px] font-medium text-[#aab3b0]">Preparing Iceland road conditions…</p><p className="mt-1 text-[10px] text-[#71807c]">Official sections and map layers</p></div></div> : null}
             {mapReady ? <button type="button" onClick={locateMe} aria-label="Locate me" className="glass absolute right-3 top-3 z-10 flex h-12 w-12 items-center justify-center rounded-[18px] bg-[#111a1a]/90 text-[#e8c4b0]"><Crosshair size={20} /></button> : null}
             {locationStatus ? <div className="glass absolute left-3 top-3 z-10 max-w-[calc(100%-5rem)] rounded-full bg-[#111a1a]/90 px-3 py-2 text-[10px] text-[#c0c9c6]">{locationStatus}</div> : null}
-            <div className="pointer-events-none absolute bottom-7 left-3 z-10 grid gap-1.5"><Legend color="#ef8e76" label="Closed" /><Legend color="#d48c6b" label="Difficult" /><Legend color="#e8c4b0" label="Caution" /><Legend color="#4d8f8a" label="Normal" /></div>
+            <div className="pointer-events-none absolute bottom-7 left-3 z-10 grid gap-1.5"><Legend color="#ef8e76" label="Road closed" /><Legend color="#d48c6b" label="Difficult conditions" /><Legend color="#e8c4b0" label="Use caution" /><Legend color="#4d8f8a" label="Normal conditions reported" /></div>
           </div>
         </section>
 
-        {(!initialData.sources.sections || !initialData.sources.conditions) ? <section className="surface-panel section-block flex gap-3 p-4"><CloudOff size={19} className="shrink-0 text-[#d48c6b]" /><p className="text-[11px] leading-5 text-[#9ca7a4]">Some official road-section data is unavailable. Unknown data is not shown as normal.</p></section> : null}
+        {unavailableLayers.length > 0 ? <section className="surface-panel section-block flex gap-3 p-4"><CloudOff size={19} className="shrink-0 text-[#d48c6b]" /><p className="text-[11px] leading-5 text-[#9ca7a4]">Partial official data: {unavailableLayers.join(", ")} unavailable. Unknown data is not shown as normal.</p></section> : null}
 
-        <section className="section-block"><div className="mb-3 flex items-end justify-between"><div><div className="eyebrow">Official fallback list</div><h2 className="mt-1 text-[19px] font-semibold">Conditions needing attention</h2></div><span className="text-right text-[10px] leading-4 text-[#82908d]">{counts.closures} closed<br />{counts.difficult} care / difficult</span></div><FallbackList data={initialData} onSelect={setSelection} /></section>
+        <AttentionSummary data={initialData} counts={counts} onSelect={setSelection} onViewAll={(nextFilter) => { setAttentionFilter(nextFilter); setAttentionOpen(true); }} />
 
-        <section className="surface-panel section-block p-4 text-[10px] leading-5 text-[#82908d]"><div>{initialData.updatedAt ? `Official feeds updated ${formatTimestamp(initialData.updatedAt)}.` : "Official update time unavailable."}</div>{initialData.sourceStale ? <div className="mt-1 text-[#d48c6b]">The latest source response may be stale. Confirm with Umferðin.</div> : null}</section>
+        <section className="surface-panel section-block p-4 text-[10px] leading-5 text-[#82908d]"><div>{initialData.updatedAt ? `Official road-condition feed updated ${formatTimestamp(initialData.updatedAt)}.` : "Official road-condition update time unavailable."}</div>{initialData.sourceStale ? <div className="mt-1 text-[#d48c6b]">The road-condition source response may be stale. Confirm with Umferðin.</div> : null}</section>
         <DataAttribution />
       </main>
       {selection ? <DetailSheet selection={selection} data={initialData} onClose={() => setSelection(undefined)} /> : null}
+      {attentionOpen ? <AttentionSheet data={initialData} filter={attentionFilter} onFilter={setAttentionFilter} onClose={() => setAttentionOpen(false)} onSelect={(next) => { setAttentionOpen(false); setSelection(next); }} /> : null}
       <BottomNav />
     </>
   );
@@ -229,12 +241,25 @@ function setLayerGroupVisibility(map: MapboxMap, layers: readonly string[], visi
   for (const layer of layers) if (map.getLayer(layer)) map.setLayoutProperty(layer, "visibility", visible ? "visible" : "none");
 }
 
-function FallbackList({ data, onSelect }: { data: RoadMapPayload; onSelect: (selection: Selection) => void }) {
-  const sections = data.sections.filter((section) => section.status === "closed" || section.status === "difficult" || section.status === "caution").sort((a, b) => statusRank(b.status) - statusRank(a.status)).slice(0, 12);
-  const incidents = data.incidents.slice(0, 6);
-  if (!sections.length && !incidents.length) return <div className="surface-panel p-4 text-[11px] leading-5 text-[#8e9b98]">No closures, difficult/caution sections or notable incidents are present in the available official data.</div>;
-  return <div className="surface-group">{sections.map((section) => <button type="button" key={section.id} onClick={() => onSelect({ kind: "section", item: section })} className="surface-row flex min-h-16 w-full items-center gap-3 px-2 py-3 text-left"><StatusDot status={section.status} /><span className="min-w-0 flex-1"><span className="block truncate text-[12px] font-semibold">{roadLabel(section)}</span><span className="mt-1 block truncate text-[10px] text-[#82908d]">{section.name ?? section.comment ?? "Official section"}</span></span><span className="text-[9px] uppercase tracking-[.08em] text-[#9da8a5]">{section.status}</span></button>)}{incidents.map((incident) => <button type="button" key={incident.id} onClick={() => onSelect({ kind: "incident", item: incident })} className="surface-row flex min-h-16 w-full items-center gap-3 px-2 py-3 text-left"><AlertTriangle size={17} className="shrink-0 text-[#d48c6b]" /><span className="min-w-0 flex-1"><span className="block text-[12px] font-semibold">{incident.title}</span><span className="mt-1 block truncate text-[10px] text-[#82908d]">{incident.roadName ?? incident.roadNumber ?? "Official incident"}</span></span></button>)}</div>;
+function AttentionSummary({ data, counts, onSelect, onViewAll }: { data: RoadMapPayload; counts: { closures: number; difficult: number; incidents: number }; onSelect: (selection: Selection) => void; onViewAll: (filter: AttentionFilter) => void }) {
+  const closed = sortAttentionSections(data.sections.filter((section) => section.status === "closed")).slice(0, 5);
+  const difficult = sortAttentionSections(data.sections.filter((section) => section.status === "difficult" || section.status === "caution")).slice(0, 3);
+  const sections = [...closed, ...difficult];
+  const defaultFilter: AttentionFilter = counts.closures ? "closed" : counts.difficult ? "difficult" : "incidents";
+  return <section className="section-block"><div className="mb-3 flex items-end justify-between gap-4"><div><div className="eyebrow">Official summary</div><h2 className="mt-1 text-[19px] font-semibold">Conditions needing attention</h2><p className="mt-1 text-[10px] text-[#82908d]">{counts.closures} closed · {counts.difficult} difficult / caution · {counts.incidents} incidents</p></div><button type="button" onClick={() => onViewAll(defaultFilter)} className="shrink-0 rounded-full border border-white/[.09] bg-white/[.035] px-3 py-2 text-[10px] font-semibold text-[#b7c0bd]">View all</button></div>{sections.length ? <div className="surface-group">{sections.map((section) => <SectionAttentionRow key={section.id} section={section} onClick={() => onSelect({ kind: "section", item: section })} />)}</div> : data.incidents.length ? <div className="surface-panel p-4 text-[11px] leading-5 text-[#8e9b98]">No closed or difficult sections are present. {data.incidents.length} official incident{data.incidents.length === 1 ? " is" : "s are"} available in View all.</div> : <div className="surface-panel p-4 text-[11px] leading-5 text-[#8e9b98]">No closures, difficult/caution sections or notable incidents are present in the available official data.</div>}</section>;
 }
+
+function AttentionSheet({ data, filter, onFilter, onClose, onSelect }: { data: RoadMapPayload; filter: AttentionFilter; onFilter: (filter: AttentionFilter) => void; onClose: () => void; onSelect: (selection: Selection) => void }) {
+  const sections = filter === "closed" ? sortAttentionSections(data.sections.filter((section) => section.status === "closed")) : sortAttentionSections(data.sections.filter((section) => section.status === "difficult" || section.status === "caution"));
+  const incidents = [...data.incidents].sort((a, b) => timestampRank(b.updatedAt) - timestampRank(a.updatedAt) || a.title.localeCompare(b.title));
+  const empty = filter === "incidents" ? incidents.length === 0 : sections.length === 0;
+  return <aside role="dialog" aria-modal="true" aria-label="All conditions needing attention" className="fixed inset-0 z-[70] mx-auto flex w-full max-w-[var(--app-width)] flex-col bg-[#0c1414]/[.99] px-[var(--app-gutter)] pb-[calc(20px+env(safe-area-inset-bottom,0px))] pt-[calc(14px+env(safe-area-inset-top,0px))] shadow-[0_0_80px_rgba(0,0,0,.65)]"><div className="flex min-h-12 items-center justify-between"><div><div className="eyebrow">Official road data</div><h2 className="mt-1 text-[20px] font-semibold">Conditions needing attention</h2></div><button type="button" onClick={onClose} aria-label="Close all conditions" className="glass flex h-11 w-11 items-center justify-center rounded-[17px] text-[#aab4b1]"><X size={19} /></button></div><div className="mt-4 grid grid-cols-3 gap-2">{(["closed", "difficult", "incidents"] as const).map((item) => <button type="button" key={item} onClick={() => onFilter(item)} aria-pressed={filter === item} className={`min-h-11 rounded-full border px-2 text-[10px] font-semibold capitalize ${filter === item ? "border-[#69a8a3]/45 bg-[#2d6b6b]/35 text-[#d7e5e2]" : "border-white/[.08] bg-white/[.035] text-[#8f9c99]"}`}>{item}</button>)}</div><div className="mt-4 min-h-0 flex-1 overflow-y-auto overscroll-contain pb-4">{empty ? <div className="surface-panel p-5 text-[12px] text-[#8e9b98]">No matching official records are available.</div> : <div className="surface-group">{filter === "incidents" ? incidents.map((incident) => <IncidentAttentionRow key={incident.id} incident={incident} onClick={() => onSelect({ kind: "incident", item: incident })} />) : sections.map((section) => <SectionAttentionRow key={section.id} section={section} onClick={() => onSelect({ kind: "section", item: section })} />)}</div>}</div></aside>;
+}
+
+function SectionAttentionRow({ section, onClick }: { section: RoadMapSection; onClick: () => void }) { return <button type="button" onClick={onClick} className="surface-row flex min-h-16 w-full items-center gap-3 px-2 py-3 text-left"><StatusDot status={section.status} /><span className="min-w-0 flex-1"><span className="block truncate text-[12px] font-semibold">{roadLabel(section)}</span><span className="mt-1 block truncate text-[10px] text-[#82908d]">{section.name ?? section.comment ?? "Official section"}</span></span><span className="max-w-24 text-right text-[9px] uppercase leading-4 tracking-[.08em] text-[#9da8a5]">{roadMapStatusLabel(section.status)}</span></button>; }
+function IncidentAttentionRow({ incident, onClick }: { incident: RoadMapIncident; onClick: () => void }) { return <button type="button" onClick={onClick} className="surface-row flex min-h-16 w-full items-center gap-3 px-2 py-3 text-left"><AlertTriangle size={17} className="shrink-0 text-[#d48c6b]" /><span className="min-w-0 flex-1"><span className="block text-[12px] font-semibold">{incident.title}</span><span className="mt-1 block truncate text-[10px] text-[#82908d]">{incident.roadName ?? incident.roadNumber ?? "Official incident"}</span></span></button>; }
+function sortAttentionSections(sections: RoadMapSection[]) { return [...sections].sort((a, b) => statusRank(b.status) - statusRank(a.status) || timestampRank(b.updatedAt) - timestampRank(a.updatedAt) || roadLabel(a).localeCompare(roadLabel(b), "en", { numeric: true })); }
+function timestampRank(value?: string) { const parsed = value ? Date.parse(value) : 0; return Number.isFinite(parsed) ? parsed : 0; }
 
 function DetailSheet({ selection, data, onClose }: { selection: Selection; data: RoadMapPayload; onClose: () => void }) {
   return <aside role="dialog" aria-modal="false" aria-label="Road map details" className="fixed bottom-[var(--roadwise-bottom-sheet-offset)] left-1/2 z-[80] max-h-[min(66dvh,560px)] w-[min(calc(100%-24px),456px)] -translate-x-1/2 overflow-y-auto overscroll-contain rounded-[28px] border border-white/[.11] bg-[#101919]/[.97] shadow-[0_28px_80px_rgba(0,0,0,.58)] backdrop-blur-2xl"><div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/[.07] bg-[#101919]/95 px-5 py-4 backdrop-blur-xl"><div className="eyebrow">Official detail</div><button type="button" onClick={onClose} aria-label="Close details" className="flex h-10 w-10 items-center justify-center rounded-[15px] bg-white/[.05] text-[#a4aeab]"><X size={18} /></button></div><div className="p-5">{selection.kind === "section" ? <SectionDetail section={selection.item} data={data} /> : selection.kind === "incident" ? <IncidentDetail incident={selection.item} /> : selection.kind === "observation" ? <ObservationDetail observation={selection.item} referenceTime={data.generatedAt} /> : <CameraDetail camera={selection.item} />}</div></aside>;
@@ -242,7 +267,7 @@ function DetailSheet({ selection, data, onClose }: { selection: Selection; data:
 
 function SectionDetail({ section, data }: { section: RoadMapSection; data: RoadMapPayload }) {
   const nearby = matchRoadSectionDetails(section, data);
-  return <><div className="flex items-start gap-3"><StatusDot status={section.status} /><div><h2 className="text-[20px] font-semibold tracking-[-.03em]">{roadLabel(section)}</h2><p className="mt-1 text-[12px] text-[#9ba6a3]">{section.name ?? "Official section name unavailable"}</p></div></div><DetailGrid items={[["Status", section.status], ["Official condition", humanState(section.officialState)], ["Updated", section.updatedAt ? formatTimestamp(section.updatedAt) : "Unavailable"], ["Freshness", section.stale ? "Stale record" : "Current feed record"]]} />{section.comment ? <DetailBlock title="Official comment">{section.comment}</DetailBlock> : null}{nearby.incidents.length ? <DetailBlock title="Relevant incidents">{nearby.incidents.map((incident) => <div key={incident.id} className="border-b border-white/[.06] py-2 last:border-0"><div className="font-semibold">{incident.title}</div><div className="mt-1 text-[#8e9b98]">{incident.description ?? "Official incident report."}</div></div>)}</DetailBlock> : null}{nearby.observation ? <DetailBlock title="Nearest roadside observation"><div className="font-semibold">{nearby.observation.name} · {nearby.observation.distanceKm.toFixed(1)} km</div><div className="mt-1 text-[#82908d]">{nearby.observation.observedAt ? observationAge(nearby.observation.observedAt, data.generatedAt) : "Observation time unavailable"}</div><ObservationValues observation={nearby.observation} /></DetailBlock> : null}{nearby.cameras.length ? <DetailBlock title="Nearby official cameras"><div className="grid gap-3">{nearby.cameras.map((camera) => <CameraCard key={camera.id} camera={camera} />)}</div></DetailBlock> : null}<SafetyCopy /></>;
+  return <><div className="flex items-start gap-3"><StatusDot status={section.status} /><div><h2 className="text-[20px] font-semibold tracking-[-.03em]">{roadLabel(section)}</h2><p className="mt-1 text-[12px] text-[#9ba6a3]">{section.name ?? "Official section name unavailable"}</p></div></div><DetailGrid items={[["Status", roadMapStatusLabel(section.status)], ["Official condition", humanState(section.officialState)], ["Updated", section.updatedAt ? formatTimestamp(section.updatedAt) : "Unavailable"], ["Freshness", section.stale ? "Stale record" : "Current feed record"]]} />{section.comment ? <DetailBlock title="Official comment">{section.comment}</DetailBlock> : null}{nearby.incidents.length ? <DetailBlock title="Relevant incidents">{nearby.incidents.map((incident) => <div key={incident.id} className="border-b border-white/[.06] py-2 last:border-0"><div className="font-semibold">{incident.title}</div><div className="mt-1 text-[#8e9b98]">{incident.description ?? "Official incident report."}</div></div>)}</DetailBlock> : null}{nearby.observation ? <DetailBlock title="Nearest roadside observation"><div className="font-semibold">{nearby.observation.name} · {nearby.observation.distanceKm.toFixed(1)} km</div><div className="mt-1 text-[#82908d]">{nearby.observation.observedAt ? observationAge(nearby.observation.observedAt, data.generatedAt) : "Observation time unavailable"}</div><ObservationValues observation={nearby.observation} /></DetailBlock> : null}{nearby.cameras.length ? <DetailBlock title="Nearby official cameras"><div className="grid gap-3">{nearby.cameras.map((camera) => <CameraCard key={camera.id} camera={camera} />)}</div></DetailBlock> : null}<SafetyCopy /></>;
 }
 
 function IncidentDetail({ incident }: { incident: RoadMapIncident }) { return <><div className="flex gap-3"><TriangleAlert size={24} className="shrink-0 text-[#d48c6b]" /><div><h2 className="text-[20px] font-semibold">{incident.title}</h2><p className="mt-1 text-[12px] text-[#8e9b98]">{incident.roadName ?? incident.roadNumber ?? "Official IRCA incident"}</p></div></div>{incident.description ? <DetailBlock title="Official comment">{incident.description}</DetailBlock> : null}<DetailGrid items={[["Type", humanState(incident.type)], ["Updated", incident.updatedAt ? formatTimestamp(incident.updatedAt) : "Unavailable"], ["Freshness", incident.stale ? "Stale record" : "Current feed record"]]} /><SafetyCopy /></>; }

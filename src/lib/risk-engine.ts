@@ -254,7 +254,7 @@ export function analyseRoute(input: RiskEngineInput): RouteAnalysis {
       summary: `Severe official or measured conditions affect this route. Reconsider the drive and consult official guidance. ${safetyReminder}`,
     },
     closed: {
-      title: "Road closed / official severe condition",
+      title: "Road closed",
       summary: `An official closure affects this route. Do not continue onto the closed section. ${safetyReminder}`,
     },
   };
