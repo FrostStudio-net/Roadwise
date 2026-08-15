@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "mapbox-gl/dist/mapbox-gl.css";
 
 :root {
   --app-width: 480px;
@@ -140,6 +141,10 @@ button:focus-visible, a:focus-visible {
 .map-card {
   height: clamp(250px, 64vw, 286px);
 }
+
+.mapboxgl-map { font: inherit; }
+.mapboxgl-ctrl-attrib { border-radius: 10px 0 0; background: rgba(10, 15, 15, .78) !important; color: #9ca7a4; }
+.mapboxgl-ctrl-attrib a { color: #b9c3c0; }
 .eyebrow {
   color: var(--warm-light);
   font-size: 10px;

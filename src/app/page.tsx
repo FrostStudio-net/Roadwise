@@ -88,9 +88,9 @@ export default function HomePage() {
           <div className="eyebrow mb-3">Useful out here</div>
           <div className="stagger-grid grid grid-cols-2 gap-2.5">
             <QuickButton icon={<Map size={20} />} label="Road map" note="Live conditions" onClick={() => router.push("/roads")} />
-            <QuickButton icon={<MountainSnow size={20} />} label="Highland roads" note="Seasonal access" />
-            <QuickButton icon={<Fuel size={20} />} label="Fuel & charge" note="Stops ahead" />
-            <QuickButton icon={<ShieldAlert size={20} />} label="Emergency" note="112 Iceland" warning />
+            <QuickButton icon={<MountainSnow size={20} />} label="F-road assistant" note="Official section status" onClick={() => router.push(`/f-roads?vehicle=${encodeURIComponent(vehicle)}`)} />
+            <QuickButton icon={<Fuel size={20} />} label="Fuel / EV" note="Nearby and along route" onClick={() => router.push(`/fuel?vehicle=${encodeURIComponent(vehicle)}`)} />
+            <QuickButton icon={<ShieldAlert size={20} />} label="Emergency" note="112 Iceland" warning onClick={() => router.push("/emergency")} />
           </div>
         </section>
 

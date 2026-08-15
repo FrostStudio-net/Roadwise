@@ -1,10 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { monitorForwardHazards } from "@/lib/forward-hazard-monitor";
 import type { VehicleType } from "@/types/analysis";
 import type { RoadCondition, RoadIncident, RoadsideMeasurement } from "@/types/road";
 
 const now = Date.parse("2026-08-15T12:00:00.000Z");
+
+afterEach(() => vi.useRealTimers());
 
 function condition(id: string, state: RoadCondition["state"], coordinates: [number, number][]): RoadCondition {
   return {
@@ -105,6 +107,8 @@ describe("forward hazard monitor", () => {
   });
 
   it("reuses vehicle-aware wind escalation", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
     const station: RoadsideMeasurement = {
       id: "wind",
       name: "Road 1 station",

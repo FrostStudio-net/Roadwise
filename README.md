@@ -18,6 +18,7 @@ Roadwise is an Iceland-specific driving assistant built with Next.js, TypeScript
 
    ```dotenv
    MAPBOX_ACCESS_TOKEN=your_server_side_token
+   NEXT_PUBLIC_MAPBOX_TOKEN=your_restricted_public_web_map_token
    ```
 
 3. Start the app:
@@ -29,6 +30,14 @@ Roadwise is an Iceland-specific driving assistant built with Next.js, TypeScript
 4. Open `http://localhost:3000`, enter `Vík`, keep the origin as Reykjavík, select a vehicle, and choose the route-check action.
 
 The Mapbox token is read only inside server services and is not exposed with a `NEXT_PUBLIC_` prefix. It must be allowed to use Mapbox Search Box, Geocoding, and Directions. Keep it out of source control and apply the narrowest restrictions compatible with requests from your deployment environment.
+
+The Roads map uses a separate `NEXT_PUBLIC_MAPBOX_TOKEN`. This must be a public `pk` token with only `styles:read` and `fonts:read`, restricted to the exact production and preview origins that serve Roadwise. Add `http://localhost:3000` separately for local development; Mapbox URL restrictions do not support IP-address entries. Never place the server-side `MAPBOX_ACCESS_TOKEN` in `NEXT_PUBLIC_MAPBOX_TOKEN`.
+
+## Fuel and EV service data
+
+The Fuel / EV page uses `amenity=fuel` and motor-vehicle `amenity=charging_station` records from OpenStreetMap through a normalized Iceland-wide Overpass snapshot cached for six hours. Roadwise retains coordinates, mapped names/providers, explicitly tagged opening hours, fuel types, connector types, connector output and station output. It does not infer missing tags or provide live charger availability, fuel inventory, fuel prices, guaranteed opening hours, battery state or driving range.
+
+OpenStreetMap is community maintained and may be incomplete or outdated. The UI includes the required “© OpenStreetMap contributors” attribution and links to the ODbL copyright page.
 
 Destination autocomplete uses server-proxied Mapbox Search Box `/suggest` and `/retrieve` requests. Suggestions are temporary and the selected feature is retained only in browser session storage for the current prototype.
 
