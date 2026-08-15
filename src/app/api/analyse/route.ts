@@ -13,7 +13,7 @@ import { geocodeIceland, getDrivingRoute } from "@/services/mapbox";
 import { getIrcaData } from "@/services/vegagerdin";
 import { getActiveWarnings } from "@/services/vedur";
 import { VEHICLE_TYPES } from "@/types/analysis";
-import type { AnalyseRouteResponse, AnalysisDebugRecord, VehicleType } from "@/types/analysis";
+import type { AnalyseRouteResponse, AnalysisDebugRecord, GeocodedPlace, VehicleType } from "@/types/analysis";
 import type { Coordinates, RoadCondition } from "@/types/road";
 
 export const runtime = "nodejs";
@@ -21,8 +21,26 @@ export const runtime = "nodejs";
 type RequestBody = {
   origin: string;
   destination: string;
+  destinationSelection?: GeocodedPlace;
   vehicle: VehicleType;
 };
+
+function isDestinationSelection(value: unknown): value is GeocodedPlace {
+  if (!value || typeof value !== "object") return false;
+  const place = value as Record<string, unknown>;
+  const point = place.coordinates;
+  return typeof place.name === "string"
+    && typeof place.fullName === "string"
+    && typeof place.featureType === "string"
+    && typeof place.mapboxId === "string"
+    && Array.isArray(place.context)
+    && Array.isArray(point)
+    && point.length === 2
+    && typeof point[0] === "number"
+    && typeof point[1] === "number"
+    && point[0] >= -24.7 && point[0] <= -13
+    && point[1] >= 63.1 && point[1] <= 66.7;
+}
 
 function isRequestBody(value: unknown): value is RequestBody {
   if (value === null || typeof value !== "object") return false;
@@ -32,7 +50,8 @@ function isRequestBody(value: unknown): value is RequestBody {
     && typeof body.destination === "string"
     && body.destination.trim().length > 0
     && typeof body.vehicle === "string"
-    && VEHICLE_TYPES.includes(body.vehicle as VehicleType);
+    && VEHICLE_TYPES.includes(body.vehicle as VehicleType)
+    && (body.destinationSelection === undefined || isDestinationSelection(body.destinationSelection));
 }
 
 function latestDate(values: Array<string | undefined>): string | undefined {
@@ -98,7 +117,7 @@ export async function POST(request: Request) {
     const officialDataPromise = Promise.all([getIrcaData(), getActiveWarnings()]);
     const origin = await geocodeIceland(body.origin);
     developmentLog(`[analyse] geocoded ${body.origin} -> ${origin.fullName} (${coordinateLabel(origin.coordinates)})`);
-    const destination = await geocodeIceland(body.destination);
+    const destination = body.destinationSelection ?? await geocodeIceland(body.destination);
     developmentLog(`[analyse] geocoded ${body.destination} -> ${destination.fullName} (${coordinateLabel(destination.coordinates)})`);
     const route = await getDrivingRoute(origin.coordinates, destination.coordinates);
     mapboxAvailable = true;
@@ -142,6 +161,7 @@ export async function POST(request: Request) {
     const roadDataAgeMinutes = ageMinutes(roadDataUpdatedAt);
 
     const response: AnalyseRouteResponse = {
+      vehicle: body.vehicle,
       route: {
         origin,
         destination,

@@ -28,7 +28,9 @@ Roadwise is an Iceland-specific driving assistant built with Next.js, TypeScript
 
 4. Open `http://localhost:3000`, enter `Vík`, keep the origin as Reykjavík, select a vehicle, and choose the route-check action.
 
-The Mapbox token is read only inside server services and is not exposed with a `NEXT_PUBLIC_` prefix.
+The Mapbox token is read only inside server services and is not exposed with a `NEXT_PUBLIC_` prefix. It must be allowed to use Mapbox Search Box, Geocoding, and Directions. Keep it out of source control and apply the narrowest restrictions compatible with requests from your deployment environment.
+
+Destination autocomplete uses server-proxied Mapbox Search Box `/suggest` and `/retrieve` requests. Suggestions are temporary and the selected feature is retained only in browser session storage for the current prototype.
 
 ## Route analysis API
 
@@ -50,7 +52,7 @@ Successful responses contain:
 - normalized route warnings with source and distance ahead where available;
 - independent IRCA and IMO source availability and freshness.
 
-Mapbox routing is required. IRCA incidents, roadside measurements and IMO warnings are independently available non-critical sources. IRCA road conditions plus section geometry are required before Roadwise will report a normal live-road result.
+Mapbox routing is required. IRCA incidents, roadside measurements and IMO warnings are independently available non-critical sources. Core IRCA road-condition availability determines whether Roadwise can report a live-road result.
 
 ## Official sources and caching
 
@@ -60,7 +62,18 @@ Mapbox routing is required. IRCA incidents, roadside measurements and IMO warnin
 - IMO active CAP warnings: revalidated every 5 minutes. HTTP 204 is a valid response meaning there are no active warnings.
 - Mapbox temporary geocoding and directions: requested per route check and not stored in the application data cache.
 
-The DATEX parser uses OpenLR WGS84 reference points for section matching. The feed also supplies detailed GML geometry in EPSG:3057; projected-coordinate conversion is intentionally deferred until a verified transformation pipeline is added.
+The DATEX parser projects IRCA's detailed EPSG:3057 GML section geometry to WGS84 and uses conservative spatial/co-travel matching. Sparse OpenLR coordinates are retained only as a fallback.
+
+## Live Drive Mode prototype
+
+Drive Mode begins GPS tracking only after the user presses **Start Drive Mode**. Browser geolocation generally requires HTTPS on a physical phone; `localhost` is treated as secure for desktop development, but a plain `http://` LAN address may be blocked on mobile.
+
+This remains a foreground web prototype:
+
+- iOS and Android may throttle or stop browser GPS when the screen locks or another app is foregrounded.
+- SpeechSynthesis availability, voice selection, and playback while locked vary by browser and operating system.
+- Roadwise does not reroute, provide turn-by-turn navigation, or provide speed limits.
+- Keep the page visible and always follow official signs and instructions.
 
 ## Safety behavior
 

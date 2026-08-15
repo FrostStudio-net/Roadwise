@@ -100,6 +100,13 @@ export type GeocodedPlace = {
   }>;
 };
 
+export type DestinationSuggestion = {
+  mapboxId: string;
+  name: string;
+  context: string;
+  featureType: string;
+};
+
 export type MapboxRoute = {
   geometry: GeoJsonLineString;
   distanceMeters: number;
@@ -107,6 +114,7 @@ export type MapboxRoute = {
 };
 
 export type AnalyseRouteResponse = {
+  vehicle: VehicleType;
   route: {
     origin: GeocodedPlace;
     destination: GeocodedPlace;

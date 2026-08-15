@@ -1,9 +1,10 @@
 import { ServiceError } from "@/services/http";
 import { developmentError } from "@/lib/server-log";
-import type { GeocodedPlace, MapboxRoute } from "@/types/analysis";
+import type { DestinationSuggestion, GeocodedPlace, MapboxRoute } from "@/types/analysis";
 import type { Coordinates } from "@/types/road";
 
 const ICELAND_BBOX = "-24.7,63.1,-13.0,66.7";
+const SEARCH_TYPES = "poi,place,city,locality,address,street";
 
 type UnknownRecord = Record<string, unknown>;
 type RankedGeocodedPlace = GeocodedPlace & { rank: number };
@@ -99,6 +100,82 @@ function placeCandidate(value: unknown, query: string): RankedGeocodedPlace | un
     mapboxId: text(properties.mapbox_id) ?? text(feature.id),
     context,
     rank: placeTypeScore + nameScore,
+  };
+}
+
+function searchContext(properties: UnknownRecord): string {
+  return text(properties.place_formatted)
+    ?? text(properties.full_address)
+    ?? contextItems(properties.context)
+      .filter((item) => item.type !== "country" && item.type !== "place")
+      .map((item) => item.name)
+      .join(" · ");
+}
+
+function suggestion(value: unknown, query: string): (DestinationSuggestion & { rank: number }) | undefined {
+  const item = record(value);
+  const mapboxId = text(item?.mapbox_id);
+  const name = text(item?.name_preferred) ?? text(item?.name);
+  const featureType = text(item?.feature_type);
+  if (!item || !mapboxId || !name || !featureType) return undefined;
+  const queryName = normalized(query);
+  const candidateName = normalized(name);
+  const typeRank: Record<string, number> = { place: 600, city: 600, locality: 550, poi: 500, address: 150, street: 50 };
+  const nameRank = candidateName === queryName ? 200 : candidateName.startsWith(queryName) ? 100 : 0;
+  return {
+    mapboxId,
+    name,
+    context: searchContext(item),
+    featureType,
+    rank: (typeRank[featureType] ?? 0) + nameRank,
+  };
+}
+
+export async function suggestIcelandDestinations(query: string, sessionToken: string): Promise<DestinationSuggestion[]> {
+  const trimmed = query.trim().normalize("NFC");
+  if (trimmed.length < 2) return [];
+  const url = new URL("https://api.mapbox.com/search/searchbox/v1/suggest");
+  url.searchParams.set("q", trimmed);
+  url.searchParams.set("session_token", sessionToken);
+  url.searchParams.set("access_token", getToken());
+  url.searchParams.set("country", "IS");
+  url.searchParams.set("bbox", ICELAND_BBOX);
+  url.searchParams.set("language", "is");
+  url.searchParams.set("types", SEARCH_TYPES);
+  url.searchParams.set("limit", "10");
+  const body = record(await mapboxJson(url));
+  return (Array.isArray(body?.suggestions) ? body.suggestions : [])
+    .map((item) => suggestion(item, trimmed))
+    .filter((item): item is DestinationSuggestion & { rank: number } => Boolean(item))
+    .sort((a, b) => b.rank - a.rank)
+    .slice(0, 5)
+    .map(({ mapboxId, name, context, featureType }) => ({ mapboxId, name, context, featureType }));
+}
+
+export async function retrieveIcelandDestination(mapboxId: string, sessionToken: string): Promise<GeocodedPlace> {
+  const url = new URL(`https://api.mapbox.com/search/searchbox/v1/retrieve/${encodeURIComponent(mapboxId)}`);
+  url.searchParams.set("session_token", sessionToken);
+  url.searchParams.set("access_token", getToken());
+  url.searchParams.set("language", "is");
+  const body = record(await mapboxJson(url));
+  const feature = record(Array.isArray(body?.features) ? body.features[0] : undefined);
+  const properties = record(feature?.properties);
+  const point = coordinates(record(feature?.geometry)?.coordinates)
+    ?? coordinates(record(properties?.coordinates)?.coordinates);
+  const context = contextItems(properties?.context);
+  const country = context.find((item) => item.type === "country");
+  const name = text(properties?.name_preferred) ?? text(properties?.name);
+  const featureType = text(properties?.feature_type);
+  if (!feature || !properties || !point || !name || !featureType || (country?.code && country.code.toUpperCase() !== "IS")) {
+    throw new ServiceError("The selected Icelandic destination could not be resolved", "LOCATION_NOT_FOUND", 400);
+  }
+  return {
+    name,
+    fullName: text(properties.full_address) ?? text(properties.place_formatted) ?? name,
+    coordinates: point,
+    featureType,
+    mapboxId: text(properties.mapbox_id) ?? mapboxId,
+    context,
   };
 }
 

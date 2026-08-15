@@ -1,21 +1,25 @@
 "use client";
 
-import { ArrowUpRight, Fuel, Map, MountainSnow, Navigation, ShieldAlert, Wind } from "lucide-react";
+import { Fuel, Map, MountainSnow, Navigation, ShieldAlert, Wind } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import BottomNav from "@/components/BottomNav";
 import ConditionCard from "@/components/ConditionCard";
+import DestinationAutocomplete from "@/components/DestinationAutocomplete";
 import Logo from "@/components/Logo";
 import VehicleSelector from "@/components/VehicleSelector";
-import type { VehicleType } from "@/types/analysis";
+import { clearDestinationSelection, storeDestinationSelection } from "@/lib/destination-selection-storage";
+import type { GeocodedPlace, VehicleType } from "@/types/analysis";
 
 export default function HomePage() {
   const router = useRouter();
   const [destination, setDestination] = useState("");
+  const [selectedDestination, setSelectedDestination] = useState<GeocodedPlace>();
   const [vehicle, setVehicle] = useState<VehicleType>("Small car (2WD)");
 
   function checkDrive() {
     const params = new URLSearchParams({ destination: destination || "Vík", vehicle });
+    if (selectedDestination?.mapboxId) params.set("destinationId", selectedDestination.mapboxId);
     router.push(`/check?${params.toString()}`);
   }
 
@@ -45,11 +49,7 @@ export default function HomePage() {
 
         <section className="section-block-lg">
           <div className="mb-3 flex items-end justify-between"><div><div className="eyebrow">Plan ahead</div><h2 className="mt-1 text-lg font-semibold tracking-[-0.025em]">Where to?</h2></div><span className="text-[10px] text-[#7f8c89]">From Reykjavík</span></div>
-          <div className="glass card flex items-center gap-3 p-2.5 pl-4">
-            <Navigation size={18} strokeWidth={1.6} className="text-[#d48c6b]" />
-            <input aria-label="Destination" value={destination} onChange={(e) => setDestination(e.target.value)} onKeyDown={(e) => e.key === "Enter" && checkDrive()} placeholder="Vík, Gullfoss, anywhere…" className="min-w-0 flex-1 bg-transparent py-3 text-[14px] outline-none placeholder:text-[#65736f]" />
-            <button onClick={checkDrive} aria-label="Check this drive" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[17px] bg-[#d48c6b] text-[#21130e] shadow-[0_8px_22px_rgba(212,140,107,.2)] transition hover:-translate-y-0.5"><ArrowUpRight size={19} /></button>
-          </div>
+          <DestinationAutocomplete value={destination} onValueChange={(value) => { setDestination(value); setSelectedDestination(undefined); clearDestinationSelection(); }} onSelect={(place) => { setDestination(place.name); setSelectedDestination(place); storeDestinationSelection(place); }} onSubmit={checkDrive} />
         </section>
 
         <section className="section-block">

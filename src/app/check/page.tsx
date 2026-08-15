@@ -7,6 +7,7 @@ import { Suspense, useEffect, useState } from "react";
 import BottomNav from "@/components/BottomNav";
 import DataAttribution from "@/components/DataAttribution";
 import VehicleSelector from "@/components/VehicleSelector";
+import { readDestinationSelection } from "@/lib/destination-selection-storage";
 import { storeRouteAnalysis } from "@/lib/route-analysis-storage";
 import type { AnalyseRouteResponse, AnalysisDebugRecord, RouteWarning, VehicleType } from "@/types/analysis";
 
@@ -22,6 +23,7 @@ function CheckContent() {
   const router = useRouter();
   const params = useSearchParams();
   const destination = params.get("destination") || "Vík";
+  const destinationId = params.get("destinationId");
   const initialVehicle = (params.get("vehicle") as VehicleType | null) ?? "Small car (2WD)";
   const [vehicle, setVehicle] = useState<VehicleType>(initialVehicle);
   const [result, setResult] = useState<AnalyseRouteResponse>();
@@ -33,7 +35,7 @@ function CheckContent() {
     fetch("/api/analyse", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ origin: "Reykjavík", destination, vehicle }),
+      body: JSON.stringify({ origin: "Reykjavík", destination, vehicle, destinationSelection: readDestinationSelection(destinationId) }),
       signal: controller.signal,
     })
       .then(async (response) => {
@@ -58,7 +60,7 @@ function CheckContent() {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [destination, vehicle]);
+  }, [destination, destinationId, vehicle]);
 
   const route = result?.route;
   const analysis = result?.analysis;
