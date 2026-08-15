@@ -2,7 +2,7 @@
 
 import { Fuel, Map, MountainSnow, Navigation, ShieldAlert, Wind } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import BottomNav from "@/components/BottomNav";
 import ConditionCard from "@/components/ConditionCard";
 import DestinationAutocomplete from "@/components/DestinationAutocomplete";
@@ -17,14 +17,37 @@ export default function HomePage() {
   const [selectedDestination, setSelectedDestination] = useState<GeocodedPlace>();
   const [vehicle, setVehicle] = useState<VehicleType>("Small car (2WD)");
   const [checking, setChecking] = useState(false);
+  const [navigationError, setNavigationError] = useState<string>();
+  const navigationPending = useRef(false);
+
+  function navigateToCheck(place?: GeocodedPlace) {
+    if (navigationPending.current) return;
+    navigationPending.current = true;
+    setChecking(true);
+    setNavigationError(undefined);
+    const selected = place ?? selectedDestination;
+    const params = new URLSearchParams({ destination: selected?.name ?? (destination || "Vík"), vehicle });
+    if (selected?.mapboxId) params.set("destinationId", selected.mapboxId);
+    try {
+      router.push(`/check?${params.toString()}`);
+    } catch (error) {
+      navigationPending.current = false;
+      setChecking(false);
+      setNavigationError("Couldn’t open the route check. Please try again.");
+      throw error;
+    }
+    window.setTimeout(() => {
+      navigationPending.current = false;
+      setChecking(false);
+    }, 2_000);
+  }
 
   function checkDrive() {
-    if (checking) return;
-    setChecking(true);
-    const params = new URLSearchParams({ destination: destination || "Vík", vehicle });
-    if (selectedDestination?.mapboxId) params.set("destinationId", selectedDestination.mapboxId);
-    router.push(`/check?${params.toString()}`);
-    window.setTimeout(() => setChecking(false), 2_000);
+    try {
+      navigateToCheck();
+    } catch {
+      // The inline error set by navigateToCheck keeps the typed fallback recoverable.
+    }
   }
 
   return (
@@ -53,7 +76,7 @@ export default function HomePage() {
 
         <section className="section-block-lg">
           <div className="mb-3 flex items-end justify-between"><div><div className="eyebrow">Plan ahead</div><h2 className="mt-1 text-lg font-semibold tracking-[-0.025em]">Where to?</h2></div><span className="text-[10px] text-[#7f8c89]">From Reykjavík</span></div>
-          <DestinationAutocomplete value={destination} onValueChange={(value) => { setDestination(value); setSelectedDestination(undefined); clearDestinationSelection(); }} onSelect={(place) => { setDestination(place.name); setSelectedDestination(place); storeDestinationSelection(place); }} onSubmit={checkDrive} disabled={checking} />
+          <DestinationAutocomplete value={destination} onValueChange={(value) => { setDestination(value); setSelectedDestination(undefined); setNavigationError(undefined); clearDestinationSelection(); }} onSelect={(place) => { setDestination(place.name); setSelectedDestination(place); storeDestinationSelection(place); navigateToCheck(place); }} onSubmit={checkDrive} disabled={checking} error={navigationError} />
         </section>
 
         <section className="section-block">
