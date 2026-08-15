@@ -43,6 +43,7 @@ const FILTERS: Array<{ id: RoadMapFilter; label: string }> = [
 ];
 
 const SECTION_LAYER = "roadwise-road-sections";
+const ATTENTION_SECTION_FILTER = ["in", ["get", "status"], ["literal", ["closed", "difficult", "caution"]]] as FilterSpecification;
 const POINT_LAYER_GROUPS = {
   incidents: ["incidents-clusters", "incidents-count", "incidents-points"],
   weather: ["weather-clusters", "weather-count", "weather-points"],
@@ -162,12 +163,12 @@ export default function RoadsClient({ initialData, mapConfigured }: { initialDat
       ? ["==", ["get", "status"], "closed"] as FilterSpecification
       : filter === "difficult"
         ? ["in", ["get", "status"], ["literal", ["caution", "difficult"]]] as FilterSpecification
-        : null;
+        : ATTENTION_SECTION_FILTER;
     map.setFilter(SECTION_LAYER, sectionFilter);
     map.setLayoutProperty(SECTION_LAYER, "visibility", ["all", "closures", "difficult"].includes(filter) ? "visible" : "none");
     setLayerGroupVisibility(map, POINT_LAYER_GROUPS.incidents, filter === "all" || filter === "incidents");
     setLayerGroupVisibility(map, POINT_LAYER_GROUPS.weather, filter === "weather");
-    setLayerGroupVisibility(map, POINT_LAYER_GROUPS.cameras, filter === "all" || filter === "cameras");
+    setLayerGroupVisibility(map, POINT_LAYER_GROUPS.cameras, filter === "cameras");
   }, [filter, mapLayersReady]);
 
   async function locateMe() {
@@ -221,8 +222,9 @@ export default function RoadsClient({ initialData, mapConfigured }: { initialDat
             {mapLoading ? <div className="map-skeleton absolute inset-0 z-20 flex items-center justify-center"><div className="w-full max-w-[330px] px-5 text-center"><Navigation size={25} className="mx-auto animate-pulse text-[#69a8a3]" /><p className="mt-3 text-[12px] font-medium text-[#aab3b0]">Loading map…</p><p className="mt-1 text-[10px] text-[#71807c]">Official sections and map layers</p><MapDiagnosticStatus status={mapDiagnostics} /></div></div> : null}
             {mapReady ? <button type="button" onClick={locateMe} aria-label="Locate me" className="glass absolute right-3 top-3 z-10 flex h-12 w-12 items-center justify-center rounded-[18px] bg-[#111a1a]/90 text-[#e8c4b0]"><Crosshair size={20} /></button> : null}
             {locationStatus ? <div className="glass absolute left-3 top-3 z-10 max-w-[calc(100%-5rem)] rounded-full bg-[#111a1a]/90 px-3 py-2 text-[10px] text-[#c0c9c6]">{locationStatus}</div> : null}
-            {mapLayersReady ? <div className="pointer-events-none absolute bottom-7 left-3 z-10 grid gap-1.5"><Legend color="#ef8e76" label="Road closed" /><Legend color="#d48c6b" label="Difficult conditions" /><Legend color="#e8c4b0" label="Use caution" /><Legend color="#4d8f8a" label="Normal conditions reported" /></div> : null}
+            {mapLayersReady ? <div className="pointer-events-none absolute bottom-7 left-3 z-10 grid gap-1.5"><Legend color="#ef8e76" label="Road closed" /><Legend color="#d48c6b" label="Difficult conditions" /><Legend color="#e8c4b0" label="Use caution" /></div> : null}
           </div>
+          <p className="mt-2 px-1 text-[9px] leading-4 text-[#778480]">A road without an overlay is not necessarily normal; an official condition record may be unavailable.</p>
         </section>
 
         {unavailableLayers.length > 0 ? <section className="surface-panel section-block flex gap-3 p-4"><CloudOff size={19} className="shrink-0 text-[#d48c6b]" /><p className="text-[11px] leading-5 text-[#9ca7a4]">Partial official data: {unavailableLayers.join(", ")} unavailable. Unknown data is not shown as normal.</p></section> : null}
@@ -241,13 +243,13 @@ export default function RoadsClient({ initialData, mapConfigured }: { initialDat
 
 function addRoadLayers(map: MapboxMap, data: RoadMapPayload) {
   map.addSource("roadwise-sections", { type: "geojson", data: { type: "FeatureCollection", features: data.sections.map((section) => ({ type: "Feature", id: section.id, properties: { id: section.id, status: section.status }, geometry: section.geometry })) } });
-  map.addLayer({ id: SECTION_LAYER, type: "line", source: "roadwise-sections", paint: { "line-color": ["match", ["get", "status"], "closed", "#ef8e76", "difficult", "#d48c6b", "caution", "#e8c4b0", "normal", "#4d8f8a", "#74817e"], "line-width": ["interpolate", ["linear"], ["zoom"], 4, 2, 8, 4, 12, 7], "line-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0.82, 9, 1] } });
+  map.addLayer({ id: SECTION_LAYER, type: "line", source: "roadwise-sections", filter: ATTENTION_SECTION_FILTER, paint: { "line-color": ["match", ["get", "status"], "closed", "#ef8e76", "difficult", "#d48c6b", "caution", "#e8c4b0", "normal", "#4d8f8a", "#74817e"], "line-width": ["interpolate", ["linear"], ["zoom"], 4, 2, 8, 4, 12, 7], "line-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0.82, 9, 1] } });
 }
 
 function addPointLayers(map: MapboxMap, data: RoadMapPayload) {
   addClusteredPoints(map, "incidents", data.incidents.map((incident) => ({ id: incident.id, coordinates: incident.coordinates, icon: incidentIcon(incident.type) })), "#d48c6b", true);
   addClusteredPoints(map, "weather", data.observations.map((observation) => ({ id: observation.id, coordinates: observation.coordinates, icon: "↗" })), "#69a8a3", false);
-  addClusteredPoints(map, "cameras", data.cameras.map((camera) => ({ id: camera.id, coordinates: camera.coordinates, icon: "▣" })), "#e8c4b0", true);
+  addClusteredPoints(map, "cameras", data.cameras.map((camera) => ({ id: camera.id, coordinates: camera.coordinates, icon: "▣" })), "#e8c4b0", false);
 }
 
 function addClusteredPoints(map: MapboxMap, name: "incidents" | "weather" | "cameras", items: Array<{ id: string; coordinates: [number, number]; icon: string }>, color: string, visible: boolean) {
