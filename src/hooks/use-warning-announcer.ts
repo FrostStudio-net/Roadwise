@@ -41,10 +41,10 @@ export function useWarningAnnouncer(upcoming: UpcomingWarning[], active: boolean
 }
 
 export function announcementText(warning: RouteWarning, thresholdKm: number): string {
-  if (warning.severity === "closed") return "Road closure ahead. Check your route before continuing.";
-  if (warning.severity === "difficult") return "Difficult road conditions ahead.";
+  if (warning.severity === "closed") return "Road closure ahead. Check official signs and your route.";
   const hazard = warning.type === "looseChippings" ? "Loose gravel"
     : warning.type === "roadworks" ? "Roadworks"
+      : warning.type === "strongWinds" ? "Strong winds"
       : warning.title;
   const distanceText = thresholdKm < 1 ? "five hundred metres" : `${thresholdKm} ${thresholdKm === 1 ? "kilometre" : "kilometres"}`;
   return `${hazard} ahead in ${distanceText}.`;

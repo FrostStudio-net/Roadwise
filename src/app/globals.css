@@ -49,9 +49,30 @@ body::before {
 
 button, input, select { font: inherit; }
 button { cursor: pointer; }
-button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible {
+button:focus-visible, a:focus-visible {
   outline: 2px solid var(--warm);
   outline-offset: 3px;
+}
+
+.destination-input,
+.destination-input:focus,
+.destination-input:focus-visible {
+  border: 0 !important;
+  border-color: transparent !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.destination-suggestions {
+  max-height: clamp(6rem, calc(100dvh - 12rem - env(safe-area-inset-bottom)), 19rem);
+  -webkit-overflow-scrolling: touch;
+}
+
+.vehicle-options {
+  max-height: min(22rem, calc(100dvh - 7rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
+  -webkit-overflow-scrolling: touch;
 }
 
 ::selection { background: rgba(212, 140, 107, 0.35); }
@@ -78,6 +99,15 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
   box-shadow: 0 22px 55px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.055);
   -webkit-backdrop-filter: blur(24px) saturate(1.4);
   backdrop-filter: blur(24px) saturate(1.4);
+}
+
+.roadwise-focus-shell:focus-within {
+  border-color: rgba(74, 143, 143, 0.6);
+  background: linear-gradient(145deg, rgba(45, 107, 107, 0.14), rgba(255, 252, 248, 0.035));
+  box-shadow:
+    0 0 0 3px rgba(45, 107, 107, 0.14),
+    0 22px 55px rgba(0, 0, 0, 0.24),
+    inset 0 1px 0 rgba(232, 196, 176, 0.09);
 }
 
 .card { border-radius: 26px; }
