@@ -199,6 +199,14 @@ button:focus-visible, a:focus-visible {
   height: clamp(250px, 64vw, 286px);
 }
 
+.map-skeleton {
+  background:
+    linear-gradient(118deg, transparent 0 38%, rgba(105, 168, 163, .07) 39% 40%, transparent 41% 100%),
+    linear-gradient(24deg, transparent 0 56%, rgba(212, 140, 107, .055) 57% 58%, transparent 59% 100%),
+    radial-gradient(circle at 50% 42%, rgba(45, 107, 107, .2), #0d1515 70%);
+  background-size: 160px 160px, 190px 190px, auto;
+}
+
 .mapboxgl-map { font: inherit; }
 .mapboxgl-ctrl-attrib { border-radius: 10px 0 0; background: rgba(10, 15, 15, .78) !important; color: #9ca7a4; }
 .mapboxgl-ctrl-attrib a { color: #b9c3c0; }

@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+import { unstable_cache } from "next/cache";
+
+import DataPageLoading from "@/components/DataPageLoading";
 import FRoadAssistantClient from "@/components/FRoadAssistantClient";
 import { buildFRoadCatalog, isFRoadSourceStale } from "@/lib/f-road";
 import { getCameras } from "@/services/cameras";
@@ -6,16 +10,10 @@ import { VEHICLE_TYPES } from "@/types/analysis";
 import type { VehicleType } from "@/types/analysis";
 import type { FRoadSourceStatus } from "@/types/f-road";
 
-export const revalidate = 0;
+export const revalidate = 300;
 
-export default async function FRoadsPage({ searchParams }: {
-  searchParams: Promise<{ vehicle?: string | string[] }>;
-}) {
-  const [irca, cameras, params] = await Promise.all([getIrcaData(), getCameras(), searchParams]);
-  const requested = Array.isArray(params.vehicle) ? params.vehicle[0] : params.vehicle;
-  const initialVehicle = requested && VEHICLE_TYPES.includes(requested as VehicleType)
-    ? requested as VehicleType
-    : "Small car (2WD)";
+const getFRoadPageDataCached = unstable_cache(async () => {
+  const [irca, cameras] = await Promise.all([getIrcaData(), getCameras()]);
   const updatedAt = irca.roadConditions.updatedAt;
   const sourceStatus: FRoadSourceStatus = {
     sectionsAvailable: irca.sections.available,
@@ -31,6 +29,20 @@ export default async function FRoadsPage({ searchParams }: {
     incidents: irca.incidents.data,
     cameras: cameras.data,
   });
+  return { catalog, sourceStatus };
+}, ["f-road-page-data-v1"], { revalidate: 300 });
 
+export default function FRoadsPage({ searchParams }: {
+  searchParams: Promise<{ vehicle?: string | string[] }>;
+}) {
+  return <Suspense fallback={<DataPageLoading title="F-road Assistant" subtitle="Official highland-road status" />}><FRoadData searchParams={searchParams} /></Suspense>;
+}
+
+async function FRoadData({ searchParams }: { searchParams: Promise<{ vehicle?: string | string[] }> }) {
+  const [{ catalog, sourceStatus }, params] = await Promise.all([getFRoadPageDataCached(), searchParams]);
+  const requested = Array.isArray(params.vehicle) ? params.vehicle[0] : params.vehicle;
+  const initialVehicle = requested && VEHICLE_TYPES.includes(requested as VehicleType)
+    ? requested as VehicleType
+    : "Small car (2WD)";
   return <FRoadAssistantClient catalog={catalog} initialVehicle={initialVehicle} sourceStatus={sourceStatus} />;
 }

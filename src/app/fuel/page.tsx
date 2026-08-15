@@ -1,13 +1,20 @@
+import { Suspense } from "react";
+
+import DataPageLoading from "@/components/DataPageLoading";
 import FuelClient from "@/components/FuelClient";
 import { getServicePoiSnapshot } from "@/services/service-pois";
 import { VEHICLE_TYPES } from "@/types/analysis";
 import type { VehicleType } from "@/types/analysis";
 
-export const revalidate = 0;
+export const revalidate = 21_600;
 
-export default async function FuelPage({ searchParams }: {
+export default function FuelPage({ searchParams }: {
   searchParams: Promise<{ vehicle?: string | string[] }>;
 }) {
+  return <Suspense fallback={<DataPageLoading title="Fuel / EV" subtitle="Roadwise-listed service stops" map />}><FuelData searchParams={searchParams} /></Suspense>;
+}
+
+async function FuelData({ searchParams }: { searchParams: Promise<{ vehicle?: string | string[] }> }) {
   const [initialSnapshot, params] = await Promise.all([getServicePoiSnapshot(), searchParams]);
   const requested = Array.isArray(params.vehicle) ? params.vehicle[0] : params.vehicle;
   const initialVehicle = requested && VEHICLE_TYPES.includes(requested as VehicleType)

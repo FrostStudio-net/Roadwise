@@ -20,6 +20,7 @@ import type { FilterSpecification, GeoJSONSource, Map as MapboxMap, MapLayerMous
 import BottomNav from "@/components/BottomNav";
 import AppHeader from "@/components/AppHeader";
 import DataAttribution from "@/components/DataAttribution";
+import { developmentMapError, mapContainerHasSize, observeMapSize } from "@/lib/client-map";
 import { matchRoadSectionDetails, ROAD_MAP_DEFAULT_VIEW, roadMapStatusLabel } from "@/lib/road-map";
 import type { RoadMapCamera, RoadMapFilter, RoadMapIncident, RoadMapObservation, RoadMapPayload, RoadMapSection } from "@/types/road-map";
 
@@ -62,36 +63,62 @@ export default function RoadsClient({ initialData, mapConfigured }: { initialDat
     if (!mapConfigured || !mapContainer.current || mapRef.current) return;
     let disposed = false;
     let map: MapboxMap | undefined;
+    let stopObservingSize: (() => void) | undefined;
+    let loaded = false;
+    const timeout = window.setTimeout(() => {
+      if (!loaded) {
+        developmentMapError("roads", "initialization timed out");
+        setMapError("The interactive map took too long to load. Official conditions remain available below.");
+      }
+    }, 12_000);
     void import("mapbox-gl").then(({ default: mapboxgl }) => {
-      if (disposed || !mapContainer.current) return;
+      const container = mapContainer.current;
+      if (disposed || !container) return;
       const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN?.trim();
-      if (!token) return;
-      map = new mapboxgl.Map({
-        container: mapContainer.current,
-        accessToken: token,
-        style: "mapbox://styles/mapbox/dark-v11",
-        center: ROAD_MAP_DEFAULT_VIEW.center,
-        zoom: ROAD_MAP_DEFAULT_VIEW.zoom,
-        minZoom: 4,
-        maxZoom: 15,
-        attributionControl: false,
-      });
+      if (!token) { window.clearTimeout(timeout); setMapError("A restricted public Mapbox token is required. Official conditions remain available below."); return; }
+      if (!mapboxgl.supported()) { window.clearTimeout(timeout); setMapError("This browser does not support the WebGL map. Official conditions remain available below."); return; }
+      if (!mapContainerHasSize(container)) { window.clearTimeout(timeout); developmentMapError("roads", "container has no size"); setMapError("The interactive map could not be sized. Official conditions remain available below."); return; }
+      try {
+        map = new mapboxgl.Map({
+          container,
+          accessToken: token,
+          style: "mapbox://styles/mapbox/dark-v11",
+          center: ROAD_MAP_DEFAULT_VIEW.center,
+          zoom: ROAD_MAP_DEFAULT_VIEW.zoom,
+          minZoom: 4,
+          maxZoom: 15,
+          attributionControl: false,
+        });
+      } catch (error) {
+        window.clearTimeout(timeout);
+        developmentMapError("roads", "constructor failed", error);
+        setMapError("The interactive map could not be initialized. Official conditions remain available below.");
+        return;
+      }
       mapRef.current = map;
+      stopObservingSize = observeMapSize(map, container);
       map.addControl(new mapboxgl.AttributionControl({ compact: true }), "bottom-right");
-      map.on("error", () => {
-        if (map && !map.isStyleLoaded()) setMapError("The interactive map could not be loaded. Official conditions remain available below.");
+      map.on("error", (event) => {
+        developmentMapError("roads", "Mapbox GL error", event.error);
+        if (!loaded) setMapError("The interactive map could not be loaded. Check the public token restrictions. Official conditions remain available below.");
       });
       map.on("load", () => {
         if (!map) return;
+        loaded = true;
+        window.clearTimeout(timeout);
+        setMapError(undefined);
+        map.resize();
         reduceBaseMapClutter(map);
         addRoadLayers(map, initialData);
         addPointLayers(map, initialData);
         bindMapInteractions(map, initialData, setSelection);
         setMapReady(true);
       });
-    }).catch(() => setMapError("The interactive map could not be loaded. Official conditions remain available below."));
+    }).catch((error) => { window.clearTimeout(timeout); developmentMapError("roads", "module or initialization failed", error); setMapError("The interactive map could not be loaded. Official conditions remain available below."); });
     return () => {
       disposed = true;
+      window.clearTimeout(timeout);
+      stopObservingSize?.();
       userMarkerRef.current?.remove();
       map?.remove();
       mapRef.current = undefined;
@@ -156,10 +183,10 @@ export default function RoadsClient({ initialData, mapConfigured }: { initialDat
         <section className="mt-5">
           <div className="grid grid-cols-3 gap-2" aria-label="Map filters">{FILTERS.map(({ id, label }) => <button key={id} type="button" aria-pressed={filter === id} onClick={() => setFilter(id)} className={`min-h-10 rounded-full border px-2 text-[10px] font-semibold transition ${filter === id ? "border-[#69a8a3]/45 bg-[#2d6b6b]/35 text-[#d7e5e2]" : "border-white/[.08] bg-white/[.035] text-[#8f9c99]"}`}>{label}</button>)}</div>
 
-          <div className={`glass relative mt-3 overflow-hidden rounded-[28px] border-white/[.1] ${mapConfigured && !mapError ? "h-[min(58dvh,520px)] min-h-[390px]" : "h-[260px]"}`} role="region" aria-label="Interactive Iceland road-condition map">
+          <div className={`glass map-skeleton relative mt-3 overflow-hidden rounded-[28px] border-white/[.1] ${mapConfigured && !mapError ? "h-[min(58dvh,520px)] min-h-[390px]" : "h-[240px]"}`} role="region" aria-label="Interactive Iceland road-condition map">
             <div ref={mapContainer} className="absolute inset-0" />
             {!mapConfigured || mapError ? <MapFallback message={mapError ?? "Add a restricted NEXT_PUBLIC_MAPBOX_TOKEN to enable the interactive map."} /> : null}
-            {mapConfigured && !mapReady && !mapError ? <div className="absolute inset-0 flex items-center justify-center bg-[radial-gradient(circle_at_50%_42%,rgba(45,107,107,.18),#0d1515_70%)]"><div className="text-center"><Navigation size={25} className="mx-auto animate-pulse text-[#69a8a3]" /><p className="mt-3 text-[12px] font-medium text-[#aab3b0]">Preparing Iceland road conditions…</p><p className="mt-1 text-[10px] text-[#71807c]">Official sections and map layers</p></div></div> : null}
+            {mapConfigured && !mapReady && !mapError ? <div className="absolute inset-0 flex items-center justify-center"><div className="text-center"><Navigation size={25} className="mx-auto animate-pulse text-[#69a8a3]" /><p className="mt-3 text-[12px] font-medium text-[#aab3b0]">Loading map…</p><p className="mt-1 text-[10px] text-[#71807c]">Official sections and map layers</p></div></div> : null}
             {mapReady ? <button type="button" onClick={locateMe} aria-label="Locate me" className="glass absolute right-3 top-3 z-10 flex h-12 w-12 items-center justify-center rounded-[18px] bg-[#111a1a]/90 text-[#e8c4b0]"><Crosshair size={20} /></button> : null}
             {locationStatus ? <div className="glass absolute left-3 top-3 z-10 max-w-[calc(100%-5rem)] rounded-full bg-[#111a1a]/90 px-3 py-2 text-[10px] text-[#c0c9c6]">{locationStatus}</div> : null}
             <div className="pointer-events-none absolute bottom-7 left-3 z-10 grid gap-1.5"><Legend color="#ef8e76" label="Road closed" /><Legend color="#d48c6b" label="Difficult conditions" /><Legend color="#e8c4b0" label="Use caution" /><Legend color="#4d8f8a" label="Normal conditions reported" /></div>

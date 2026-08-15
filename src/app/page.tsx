@@ -2,6 +2,7 @@
 
 import { Fuel, Map, MountainSnow, Navigation, ShieldAlert, Wind } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useRef, useState } from "react";
 import BottomNav from "@/components/BottomNav";
 import ConditionCard from "@/components/ConditionCard";
@@ -91,10 +92,10 @@ export default function HomePage() {
         <section className="section-block">
           <div className="eyebrow mb-3">Useful out here</div>
           <div className="app-launcher-grid grid auto-rows-fr grid-cols-2 gap-2.5">
-            <QuickButton icon={<Map size={20} />} label="Road map" note="Official conditions" onClick={() => router.push("/roads")} />
-            <QuickButton icon={<MountainSnow size={20} />} label="F-road assistant" note="Official section status" onClick={() => router.push(`/f-roads?vehicle=${encodeURIComponent(vehicle)}`)} />
-            <QuickButton icon={<Fuel size={20} />} label="Fuel / EV" note="Nearby and along route" onClick={() => router.push(`/fuel?vehicle=${encodeURIComponent(vehicle)}`)} />
-            <QuickButton icon={<ShieldAlert size={20} />} label="Emergency" note="112 Iceland" warning onClick={() => router.push("/emergency")} />
+            <QuickLink icon={<Map size={20} />} label="Road map" note="Official conditions" href="/roads" />
+            <QuickLink icon={<MountainSnow size={20} />} label="F-road assistant" note="Official section status" href={`/f-roads?vehicle=${encodeURIComponent(vehicle)}`} />
+            <QuickLink icon={<Fuel size={20} />} label="Fuel / EV" note="Nearby and along route" href={`/fuel?vehicle=${encodeURIComponent(vehicle)}`} />
+            <QuickLink icon={<ShieldAlert size={20} />} label="Emergency" note="112 Iceland" warning href="/emergency" />
           </div>
         </section>
 
@@ -105,11 +106,11 @@ export default function HomePage() {
   );
 }
 
-function QuickButton({ icon, label, note, warning, onClick }: { icon: React.ReactNode; label: string; note: string; warning?: boolean; onClick?: () => void }) {
+function QuickLink({ icon, label, note, warning, href }: { icon: React.ReactNode; label: string; note: string; warning?: boolean; href: string }) {
   return (
-    <button onClick={onClick} className="glass card relative flex min-h-[104px] overflow-hidden p-4 text-left transition hover:-translate-y-1">
+    <Link href={href} className="glass card relative flex min-h-[104px] overflow-hidden p-4 text-left transition hover:-translate-y-1">
       <span className={`topo-lines ${warning ? "text-[#7a3b2e]" : "text-[#2d6b6b]"}`} />
       <span className="relative flex w-full flex-col justify-between"><span className={warning ? "text-[#d48c6b]" : "text-[#69a8a3]"}>{icon}</span><span><span className="block text-[13px] font-semibold">{label}</span><span className="mt-0.5 block text-[10px] text-[#7f8c89]">{note}</span></span></span>
-    </button>
+    </Link>
   );
 }

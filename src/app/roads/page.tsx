@@ -1,7 +1,7 @@
 import RoadsClient from "@/components/RoadsClient";
 import { getRoadMapPayload } from "@/services/road-map";
 
-export const revalidate = 0;
+export const revalidate = 300;
 
 export default async function RoadsPage() {
   const payload = await getRoadMapPayload();

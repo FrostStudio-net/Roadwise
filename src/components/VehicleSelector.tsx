@@ -9,11 +9,16 @@ import {
   Check,
   ChevronDown,
 } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import type { VehicleType } from "@/types/analysis";
 
 type Props = { vehicle: VehicleType; onChange?: (vehicle: VehicleType) => void };
+type MenuPlacement = { mode: "up" | "down" | "sheet"; top: number; left: number; width: number; maxHeight: number };
+
+const MENU_HEIGHT = 292;
+const VIEWPORT_MARGIN = 12;
 
 const vehicles: Array<{
   label: VehicleType;
@@ -29,15 +34,18 @@ const vehicles: Array<{
 export default function VehicleSelector({ vehicle, onChange }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const listboxId = useId();
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(() => selectedIndex(vehicle));
+  const [placement, setPlacement] = useState<MenuPlacement>();
 
   useEffect(() => {
     if (!open) return;
 
     function closeOnOutsidePress(event: PointerEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (!rootRef.current?.contains(target) && !menuRef.current?.contains(target)) setOpen(false);
     }
 
     function closeOnEscape(event: KeyboardEvent) {
@@ -52,6 +60,27 @@ export default function VehicleSelector({ vehicle, onChange }: Props) {
     return () => {
       document.removeEventListener("pointerdown", closeOnOutsidePress);
       document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const updatePlacement = () => {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      setPlacement(calculateMenuPlacement(trigger.getBoundingClientRect()));
+    };
+    updatePlacement();
+    const viewport = window.visualViewport;
+    viewport?.addEventListener("resize", updatePlacement);
+    viewport?.addEventListener("scroll", updatePlacement);
+    window.addEventListener("resize", updatePlacement);
+    window.addEventListener("scroll", updatePlacement, true);
+    return () => {
+      viewport?.removeEventListener("resize", updatePlacement);
+      viewport?.removeEventListener("scroll", updatePlacement);
+      window.removeEventListener("resize", updatePlacement);
+      window.removeEventListener("scroll", updatePlacement, true);
     };
   }, [open]);
 
@@ -134,12 +163,15 @@ export default function VehicleSelector({ vehicle, onChange }: Props) {
         </button>
       </div>
 
-      {open ? (
+      {open && placement ? createPortal(
         <div
+          ref={menuRef}
           id={listboxId}
           role="listbox"
           aria-label="Choose your vehicle"
-          className="vehicle-options glass absolute bottom-full left-0 z-[80] mb-2 w-full overflow-y-auto overscroll-contain rounded-[24px] border-white/[.11] bg-[#111a1a]/95 p-2 shadow-[0_24px_65px_rgba(0,0,0,.46),inset_0_1px_0_rgba(255,255,255,.06)]"
+          data-placement={placement.mode}
+          style={{ top: placement.top, left: placement.left, width: placement.width, maxHeight: placement.maxHeight }}
+          className={`vehicle-options glass fixed z-[90] overflow-y-auto overscroll-contain border-white/[.11] bg-[#111a1a]/[.98] p-2 shadow-[0_24px_65px_rgba(0,0,0,.56),inset_0_1px_0_rgba(255,255,255,.06)] ${placement.mode === "sheet" ? "rounded-[26px] pb-[max(8px,env(safe-area-inset-bottom,0px))]" : "rounded-[24px]"}`}
         >
           {vehicles.map(({ label, icon: Icon }, index) => {
             const selected = label === vehicle;
@@ -171,10 +203,38 @@ export default function VehicleSelector({ vehicle, onChange }: Props) {
               </button>
             );
           })}
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </div>
   );
+}
+
+export function calculateMenuPlacement(rect: Pick<DOMRect, "top" | "bottom" | "left" | "width">, viewport = currentVisualViewport()): MenuPlacement {
+  const visibleTop = viewport.offsetTop + VIEWPORT_MARGIN;
+  const visibleBottom = viewport.offsetTop + viewport.height - VIEWPORT_MARGIN;
+  const visibleLeft = viewport.offsetLeft + VIEWPORT_MARGIN;
+  const visibleRight = viewport.offsetLeft + viewport.width - VIEWPORT_MARGIN;
+  const gap = 8;
+  const below = Math.max(0, visibleBottom - rect.bottom - gap);
+  const above = Math.max(0, rect.top - visibleTop - gap);
+  const width = Math.max(0, Math.min(rect.width, visibleRight - visibleLeft));
+  const left = Math.min(Math.max(rect.left, visibleLeft), Math.max(visibleLeft, visibleRight - width));
+
+  if (below >= MENU_HEIGHT) return { mode: "down", top: rect.bottom + gap, left, width, maxHeight: MENU_HEIGHT };
+  if (above >= MENU_HEIGHT) return { mode: "up", top: rect.top - gap - MENU_HEIGHT, left, width, maxHeight: MENU_HEIGHT };
+
+  const maxHeight = Math.max(180, Math.min(MENU_HEIGHT, viewport.height - VIEWPORT_MARGIN * 2));
+  const sheetWidth = Math.max(0, Math.min(456, visibleRight - visibleLeft));
+  const sheetLeft = viewport.offsetLeft + Math.max(VIEWPORT_MARGIN, (viewport.width - sheetWidth) / 2);
+  return { mode: "sheet", top: visibleBottom - maxHeight, left: sheetLeft, width: sheetWidth, maxHeight };
+}
+
+function currentVisualViewport() {
+  const viewport = window.visualViewport;
+  return viewport
+    ? { offsetTop: viewport.offsetTop, offsetLeft: viewport.offsetLeft, width: viewport.width, height: viewport.height }
+    : { offsetTop: 0, offsetLeft: 0, width: window.innerWidth, height: window.innerHeight };
 }
 
 function selectedIndex(vehicle: VehicleType): number {

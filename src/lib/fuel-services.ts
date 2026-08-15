@@ -15,7 +15,7 @@ export const FUEL_SERVICE_CONFIG = {
 
 export type FuelPageState = "ready" | "no-route" | "source-unavailable";
 
-export function filterServicePois(pois: ServicePoi[], filter: ServicePoiType | "all"): ServicePoi[] {
+export function filterServicePois<T extends ServicePoi>(pois: T[], filter: ServicePoiType | "all"): T[] {
   return filter === "all" ? pois : pois.filter((poi) => poi.type === filter);
 }
 
@@ -23,7 +23,7 @@ export function nearestServicePois(
   origin: Coordinates,
   pois: ServicePoi[],
   filter: ServicePoiType | "all",
-  limit = FUEL_SERVICE_CONFIG.nearbyLimit,
+  limit: number = FUEL_SERVICE_CONFIG.nearbyLimit,
 ): NearbyServicePoi[] {
   return filterServicePois(pois, filter)
     .map((poi) => ({ ...poi, distanceKm: distance(point(origin), point(poi.coordinates), { units: "kilometers" }) }))

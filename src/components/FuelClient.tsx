@@ -1,13 +1,14 @@
 "use client";
 
 import { BatteryCharging, ChevronRight, CloudOff, Crosshair, Fuel, MapPin, Navigation, Search, X, Zap } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GeoJSONSource, Map as MapboxMap, MapLayerMouseEvent, Marker } from "mapbox-gl";
 
 import BottomNav from "@/components/BottomNav";
 import AppHeader from "@/components/AppHeader";
 import VehicleSelector from "@/components/VehicleSelector";
-import { detectLongServiceGaps, filterServicePois, matchServicePoisToRoute, nearestServicePois, routeProgressAt } from "@/lib/fuel-services";
+import { developmentMapError, mapContainerHasSize, observeMapSize } from "@/lib/client-map";
+import { detectLongServiceGaps, filterServicePois, FUEL_SERVICE_CONFIG, matchServicePoisToRoute, nearestServicePois, routeProgressAt } from "@/lib/fuel-services";
 import { readRouteAnalysis } from "@/lib/route-analysis-storage";
 import type { VehicleType } from "@/types/analysis";
 import type { Coordinates, GeoJsonLineString } from "@/types/road";
@@ -48,8 +49,10 @@ export default function FuelClient({ initialSnapshot, initialVehicle, mapConfigu
 
   const preferredType: ServicePoiType = vehicle === "Electric vehicle" ? "ev" : "fuel";
   const currentRouteKm = useMemo(() => storedRoute && location ? routeProgressAt(storedRoute.geometry, location.coordinates) : undefined, [location, storedRoute]);
-  const routeMatches = useMemo(() => storedRoute ? matchServicePoisToRoute({ route: storedRoute.geometry, pois: initialSnapshot.data, filter, currentRouteKm }) : [], [currentRouteKm, filter, initialSnapshot.data, storedRoute]);
-  const nearby = useMemo(() => location ? nearestServicePois(location.coordinates, initialSnapshot.data, filter) : [], [filter, initialSnapshot.data, location]);
+  const routeMatchesAll = useMemo(() => storedRoute ? matchServicePoisToRoute({ route: storedRoute.geometry, pois: initialSnapshot.data, filter: "all", currentRouteKm }) : [], [currentRouteKm, initialSnapshot.data, storedRoute]);
+  const routeMatches = useMemo(() => filterServicePois(routeMatchesAll, filter), [filter, routeMatchesAll]);
+  const nearbyAll = useMemo(() => location ? nearestServicePois(location.coordinates, initialSnapshot.data, "all", initialSnapshot.data.length) : [], [initialSnapshot.data, location]);
+  const nearby = useMemo(() => filterServicePois(nearbyAll, filter).slice(0, FUEL_SERVICE_CONFIG.nearbyLimit), [filter, nearbyAll]);
   const searchedPois = useMemo(() => {
     const source: DisplayPoi[] = mode === "nearby" ? nearby : routeMatches;
     const normalized = query.trim().toLocaleLowerCase("is");
@@ -61,7 +64,7 @@ export default function FuelClient({ initialSnapshot, initialVehicle, mapConfigu
     return normalized ? filtered.filter((poi) => `${poi.name} ${poi.provider ?? ""}`.toLocaleLowerCase("is").includes(normalized)) : filtered;
   }, [filter, initialSnapshot.data, query]);
   const summaryType = filter === "all" ? preferredType : filter;
-  const summaryMatches = useMemo(() => storedRoute ? matchServicePoisToRoute({ route: storedRoute.geometry, pois: initialSnapshot.data, filter: summaryType, currentRouteKm }) : [], [currentRouteKm, initialSnapshot.data, storedRoute, summaryType]);
+  const summaryMatches = useMemo(() => filterServicePois(routeMatchesAll, summaryType), [routeMatchesAll, summaryType]);
   const longGaps = useMemo(() => storedRoute ? detectLongServiceGaps({ routeDistanceKm: storedRoute.distanceKm, matchedPois: summaryMatches, type: summaryType, currentRouteKm }) : [], [currentRouteKm, storedRoute, summaryMatches, summaryType]);
   const selectedWithDistance = selected
     ? (mode === "nearby" ? nearby : routeMatches).find((poi) => poi.id === selected.id) ?? selected
@@ -71,15 +74,38 @@ export default function FuelClient({ initialSnapshot, initialVehicle, mapConfigu
     if (!mapConfigured || !mapContainer.current || mapRef.current || !initialSnapshot.available) return;
     let disposed = false;
     let map: MapboxMap | undefined;
+    let stopObservingSize: (() => void) | undefined;
+    let loaded = false;
+    const timeout = window.setTimeout(() => {
+      if (!loaded) {
+        developmentMapError("fuel", "initialization timed out");
+        setMapError("The service map took too long to load. The station list remains available.");
+      }
+    }, 12_000);
     void import("mapbox-gl").then(({ default: mapboxgl }) => {
       const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN?.trim();
-      if (!token || disposed || !mapContainer.current) return;
-      map = new mapboxgl.Map({ container: mapContainer.current, accessToken: token, style: "mapbox://styles/mapbox/dark-v11", center: [-18.8, 64.85], zoom: 4.65, minZoom: 4, maxZoom: 16, attributionControl: false });
+      const container = mapContainer.current;
+      if (!token) { window.clearTimeout(timeout); setMapError("A restricted public Mapbox token is required. The station list remains available."); return; }
+      if (disposed || !container) return;
+      if (!mapboxgl.supported()) { window.clearTimeout(timeout); setMapError("This browser does not support the WebGL map. The station list remains available."); return; }
+      if (!mapContainerHasSize(container)) { window.clearTimeout(timeout); developmentMapError("fuel", "container has no size"); setMapError("The service map could not be sized. The station list remains available."); return; }
+      try {
+        map = new mapboxgl.Map({ container, accessToken: token, style: "mapbox://styles/mapbox/dark-v11", center: [-18.8, 64.85], zoom: 4.65, minZoom: 4, maxZoom: 16, attributionControl: false });
+      } catch (error) {
+        developmentMapError("fuel", "constructor failed", error);
+        setMapError("The service map could not be initialized. The station list remains available.");
+        return;
+      }
       mapRef.current = map;
+      stopObservingSize = observeMapSize(map, container);
       map.addControl(new mapboxgl.AttributionControl({ compact: true }), "bottom-right");
-      map.on("error", () => { if (map && !map.isStyleLoaded()) setMapError("The service map could not be loaded. The station list remains available."); });
+      map.on("error", (event) => { developmentMapError("fuel", "Mapbox GL error", event.error); if (!loaded) setMapError("The service map could not be loaded. Check the public token restrictions. The station list remains available."); });
       map.on("load", () => {
         if (!map) return;
+        loaded = true;
+        window.clearTimeout(timeout);
+        setMapError(undefined);
+        map.resize();
         for (const layer of map.getStyle().layers ?? []) if (layer.type === "symbol" && /(poi|transit|airport)/i.test(layer.id)) map.setLayoutProperty(layer.id, "visibility", "none");
         map.addSource("service-pois", { type: "geojson", cluster: true, clusterMaxZoom: 9, clusterRadius: 45, data: poiFeatureCollection(initialSnapshot.data) });
         map.addLayer({ id: "service-clusters", type: "circle", source: "service-pois", filter: ["has", "point_count"], paint: { "circle-color": "#172424", "circle-stroke-color": "#69a8a3", "circle-stroke-width": 1.5, "circle-radius": ["step", ["get", "point_count"], 15, 15, 19, 50, 23] } });
@@ -90,8 +116,8 @@ export default function FuelClient({ initialSnapshot, initialVehicle, mapConfigu
         bindServiceMap(map, initialSnapshot.data, setSelected);
         setMapReady(true);
       });
-    }).catch(() => setMapError("The service map could not be loaded. The station list remains available."));
-    return () => { disposed = true; userMarker.current?.remove(); map?.remove(); mapRef.current = undefined; };
+    }).catch((error) => { developmentMapError("fuel", "module or initialization failed", error); setMapError("The service map could not be loaded. The station list remains available."); });
+    return () => { disposed = true; window.clearTimeout(timeout); stopObservingSize?.(); userMarker.current?.remove(); map?.remove(); mapRef.current = undefined; };
   }, [initialSnapshot.available, initialSnapshot.data, mapConfigured]);
 
   useEffect(() => {
@@ -109,10 +135,10 @@ export default function FuelClient({ initialSnapshot, initialVehicle, mapConfigu
     if (mode === "route" && storedRoute) fitRoute(map, storedRoute.geometry);
   }, [mapReady, mode, storedRoute]);
 
-  function changeVehicle(next: VehicleType) {
+  const changeVehicle = useCallback((next: VehicleType) => {
     setVehicle(next);
     setFilter(next === "Electric vehicle" ? "ev" : "fuel");
-  }
+  }, []);
 
   function locate() {
     const map = mapRef.current;
@@ -135,18 +161,18 @@ export default function FuelClient({ initialSnapshot, initialVehicle, mapConfigu
 
     {!initialSnapshot.available ? <section className="surface-panel section-block flex gap-3 p-4"><CloudOff size={20} className="shrink-0 text-[#d48c6b]" /><div><div className="text-[13px] font-semibold">Service-stop data unavailable</div><p className="mt-1 text-[11px] leading-5 text-[#8e9b98]">{initialSnapshot.error ?? "OpenStreetMap fuel and charging data could not be loaded."} No substitute stations are shown.</p></div></section> : null}
 
-    <section className="section-block"><VehicleSelector vehicle={vehicle} onChange={changeVehicle} /></section>
-    <section className="section-block"><div className="grid grid-cols-2 gap-2 rounded-[22px] border border-white/[.07] bg-white/[.025] p-1.5"><ModeButton active={mode === "nearby"} onClick={() => setMode("nearby")} label="Nearby" icon={<Crosshair size={16} />} /><ModeButton active={mode === "route"} onClick={() => setMode("route")} label="Along route" icon={<Navigation size={16} />} /></div><div className="mt-3 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"><FilterButton active={filter === "fuel"} onClick={() => setFilter("fuel")} label="Fuel" icon={<Fuel size={15} />} /><FilterButton active={filter === "ev"} onClick={() => setFilter("ev")} label="EV chargers" icon={<BatteryCharging size={15} />} /><FilterButton active={filter === "all"} onClick={() => setFilter("all")} label="All services" icon={<MapPin size={15} />} /></div></section>
+    <section className="mt-5"><VehicleSelector vehicle={vehicle} onChange={changeVehicle} /></section>
+    <section className="mt-3"><div className="grid grid-cols-2 gap-2 rounded-[22px] border border-white/[.07] bg-white/[.025] p-1.5"><ModeButton active={mode === "nearby"} onClick={() => setMode("nearby")} label="Nearby" icon={<Crosshair size={16} />} /><ModeButton active={mode === "route"} onClick={() => setMode("route")} label="Along route" icon={<Navigation size={16} />} /></div><div className="mt-2 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"><FilterButton active={filter === "fuel"} onClick={() => setFilter("fuel")} label="Fuel" icon={<Fuel size={15} />} /><FilterButton active={filter === "ev"} onClick={() => setFilter("ev")} label="EV chargers" icon={<BatteryCharging size={15} />} /><FilterButton active={filter === "all"} onClick={() => setFilter("all")} label="All services" icon={<MapPin size={15} />} /></div></section>
 
-    <section className="section-block"><div className="roadwise-focus-shell glass flex min-h-14 items-center gap-3 rounded-[22px] px-4"><Search size={17} className="text-[#69a8a3]" /><input value={query} onChange={(event) => setQuery(event.target.value)} onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)} aria-label="Search fuel or charging stations" placeholder="Search station or provider" className="destination-input roadwise-focus-scroll min-w-0 flex-1 border-0 bg-transparent py-3 text-[13px] outline-none ring-0 focus:border-transparent focus:outline-none focus:ring-0" /></div></section>
+    <section className="mt-3"><div className="roadwise-focus-shell glass flex min-h-13 items-center gap-3 rounded-[22px] px-4"><Search size={17} className="text-[#69a8a3]" /><input value={query} onChange={(event) => setQuery(event.target.value)} onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)} aria-label="Search fuel or charging stations" placeholder="Search station or provider" className="destination-input roadwise-focus-scroll min-w-0 flex-1 border-0 bg-transparent py-3 text-[13px] outline-none ring-0 focus:border-transparent focus:outline-none focus:ring-0" /></div></section>
 
-    {mode === "nearby" || storedRoute ? <section className="section-block"><button type="button" onClick={locate} className="primary-button min-h-14">{mode === "nearby" ? "Use my location" : location ? "Update route position" : "Use my location for route position"} <Crosshair size={18} /></button>{locationStatus ? <p className="mt-2 text-center text-[10px] text-[#8e9b98]">{locationStatus}</p> : null}</section> : null}
+    {mode === "nearby" || storedRoute ? <section className="mt-3"><button type="button" onClick={locate} className="primary-button min-h-13 py-3.5">{mode === "nearby" ? "Use my location" : location ? "Update route position" : "Use my location for route position"} <Crosshair size={18} /></button>{locationStatus ? <p className="mt-2 text-center text-[10px] text-[#8e9b98]">{locationStatus}</p> : null}</section> : null}
 
     {mode === "route" && storedRoute ? <RouteSummary type={summaryType} matches={summaryMatches} gaps={longGaps} /> : null}
 
-    <section className="section-block"><div className="glass relative h-[min(52dvh,470px)] min-h-[350px] overflow-hidden rounded-[28px]" role="region" aria-label="Fuel and EV service map"><div ref={mapContainer} className="absolute inset-0" />{!mapConfigured || mapError || !initialSnapshot.available ? <div className="absolute inset-0 z-10 flex items-center justify-center bg-[radial-gradient(circle_at_50%_42%,rgba(45,107,107,.22),#0d1515_68%)] p-8 text-center"><div><CloudOff size={25} className="mx-auto text-[#d48c6b]" /><div className="mt-3 text-[13px] font-semibold">Map unavailable</div><p className="mt-2 text-[10px] leading-5 text-[#82908d]">{mapError ?? (!mapConfigured ? "A restricted public Mapbox token is required. The list remains available." : "Service-stop data is unavailable.")}</p></div></div> : null}{mapConfigured && initialSnapshot.available && !mapReady && !mapError ? <div className="absolute inset-0 flex items-center justify-center bg-[#0d1515]"><Navigation size={23} className="animate-pulse text-[#69a8a3]" /></div> : null}</div></section>
-
     <section className="section-block"><div className="mb-3 flex items-end justify-between"><div><div className="eyebrow">{mode === "nearby" ? "Nearby services" : "Driving order"}</div><h2 className="mt-1 text-[19px] font-semibold">{mode === "nearby" ? "Closest useful stops" : "Along your checked route"}</h2></div>{searchedPois.length ? <span className="text-[10px] text-[#82908d]">{searchedPois.length} listed</span> : null}</div><ServiceList mode={mode} hasLocation={Boolean(location)} hasRoute={Boolean(storedRoute)} sourceAvailable={initialSnapshot.available} pois={searchedPois} onSelect={setSelected} /></section>
+
+    <section className="section-block"><div className={`glass map-skeleton relative overflow-hidden rounded-[28px] ${!mapConfigured || mapError || !initialSnapshot.available ? "h-[220px]" : "h-[min(46dvh,400px)] min-h-[300px]"}`} role="region" aria-label="Fuel and EV service map"><div ref={mapContainer} className="absolute inset-0" />{!mapConfigured || mapError || !initialSnapshot.available ? <div className="absolute inset-0 z-10 flex items-center justify-center p-7 text-center"><div><CloudOff size={25} className="mx-auto text-[#d48c6b]" /><div className="mt-3 text-[13px] font-semibold">Map unavailable</div><p className="mt-2 text-[10px] leading-5 text-[#82908d]">{mapError ?? (!mapConfigured ? "A restricted public Mapbox token is required. The list remains available." : "Service-stop data is unavailable.")}</p></div></div> : null}{mapConfigured && initialSnapshot.available && !mapReady && !mapError ? <div className="absolute inset-0 flex items-center justify-center"><div className="text-center"><Navigation size={23} className="mx-auto animate-pulse text-[#69a8a3]" /><p className="mt-3 text-[12px] text-[#aab3b0]">Loading map…</p></div></div> : null}</div></section>
 
     <section className="surface-panel section-block p-4 text-[10px] leading-5 text-[#82908d]"><p>Fuel and charging POIs: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="text-[#a9c9c5] underline underline-offset-2">© OpenStreetMap contributors</a>, available under ODbL. Community mapping may be incomplete or outdated.</p><p className="mt-1">Roadwise does not provide live charger availability, fuel inventory or prices. Verify listed opening, connector and output details with the provider.</p>{initialSnapshot.updatedAt ? <p className="mt-1">Source snapshot: {formatTimestamp(initialSnapshot.updatedAt)}.</p> : null}</section>
   </main>{selectedWithDistance ? <PoiDetail poi={selectedWithDistance} onClose={() => setSelected(undefined)} /> : null}<BottomNav hidden={searchFocused} /></>;
