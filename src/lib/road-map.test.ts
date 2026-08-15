@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildRoadMapPayload, matchRoadSectionDetails, normalizeRoadMapStatus, sectionVisibleForFilter, simplifyRoadGeometry } from "@/lib/road-map";
+import { buildRoadMapPayload, matchRoadSectionDetails, normalizeRoadMapStatus, ROAD_MAP_DEFAULT_VIEW, sectionVisibleForFilter, simplifyRoadGeometry } from "@/lib/road-map";
 import type { RoadMapPayload } from "@/types/road-map";
 import type { RoadCondition, RoadSection } from "@/types/road";
 
@@ -51,6 +51,11 @@ describe("road map status normalization", () => {
 });
 
 describe("road map geometry and filters", () => {
+  it("opens with a national Iceland viewport", () => {
+    expect(ROAD_MAP_DEFAULT_VIEW).toEqual({ center: [-18.8, 64.85], zoom: 4.65 });
+    expect(ROAD_MAP_DEFAULT_VIEW.zoom).toBeLessThanOrEqual(5);
+  });
+
   it("keeps simplified geometry valid", () => {
     const geometry = simplifyRoadGeometry({ type: "LineString", coordinates: [
       [-20, 64], [-19.99, 64.000001], [-19.98, 64], [-19.97, 64.000001], [-19.96, 64],

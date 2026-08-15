@@ -20,7 +20,7 @@ import type { FilterSpecification, GeoJSONSource, Map as MapboxMap, MapLayerMous
 import BottomNav from "@/components/BottomNav";
 import DataAttribution from "@/components/DataAttribution";
 import Logo from "@/components/Logo";
-import { matchRoadSectionDetails } from "@/lib/road-map";
+import { matchRoadSectionDetails, ROAD_MAP_DEFAULT_VIEW } from "@/lib/road-map";
 import type { RoadMapCamera, RoadMapFilter, RoadMapIncident, RoadMapObservation, RoadMapPayload, RoadMapSection } from "@/types/road-map";
 
 type Selection =
@@ -67,8 +67,8 @@ export default function RoadsClient({ initialData, mapConfigured }: { initialDat
         container: mapContainer.current,
         accessToken: token,
         style: "mapbox://styles/mapbox/dark-v11",
-        center: [-18.8, 64.85],
-        zoom: 4.65,
+        center: ROAD_MAP_DEFAULT_VIEW.center,
+        zoom: ROAD_MAP_DEFAULT_VIEW.zoom,
         minZoom: 4,
         maxZoom: 15,
         attributionControl: false,

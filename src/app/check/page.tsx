@@ -9,6 +9,7 @@ import DataAttribution from "@/components/DataAttribution";
 import VehicleSelector from "@/components/VehicleSelector";
 import { readDestinationSelection } from "@/lib/destination-selection-storage";
 import { storeRouteAnalysis } from "@/lib/route-analysis-storage";
+import { VEHICLE_TYPES } from "@/types/analysis";
 import type { AnalyseRouteResponse, AnalysisDebugRecord, RouteWarning, VehicleType } from "@/types/analysis";
 
 type AnalyseErrorResponse = {
@@ -55,15 +56,19 @@ export default function CheckPage() {
 function CheckContent() {
   const router = useRouter();
   const params = useSearchParams();
-  const destination = params.get("destination") || "Vík";
+  const destination = params.get("destination")?.trim() ?? "";
   const destinationId = params.get("destinationId");
-  const initialVehicle = (params.get("vehicle") as VehicleType | null) ?? "Small car (2WD)";
+  const requestedVehicle = params.get("vehicle");
+  const initialVehicle = requestedVehicle && VEHICLE_TYPES.includes(requestedVehicle as VehicleType)
+    ? requestedVehicle as VehicleType
+    : "Small car (2WD)";
   const [vehicle, setVehicle] = useState<VehicleType>(initialVehicle);
   const [result, setResult] = useState<AnalyseRouteResponse>();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(destination));
   const [requestError, setRequestError] = useState<string>();
 
   useEffect(() => {
+    if (!destination) return;
     let active = true;
     requestAnalysis({ origin: "Reykjavík", destination, vehicle, destinationSelection: readDestinationSelection(destinationId) })
       .then((data) => {
@@ -97,11 +102,15 @@ function CheckContent() {
 
         <section className="section-block-lg">
           <div className="text-[12px] text-[#8e9b98]">From {route?.origin.name ?? "Reykjavík"}</div>
-          <h1 className="mt-1 text-[35px] font-semibold tracking-[-0.055em]">To {route?.destination.name ?? destination}</h1>
+          <h1 className="mt-1 text-[35px] font-semibold tracking-[-0.055em]">{destination ? `To ${route?.destination.name ?? destination}` : "Choose a destination"}</h1>
           {route && <div className="mt-2 text-[11px] uppercase tracking-[.12em] text-[#778581]">{route.distanceKm.toLocaleString()} km · {formatDuration(route.durationMinutes)}</div>}
         </section>
 
-        {loading ? (
+        {!destination ? (
+          <section className="glass card section-block p-6">
+            <Navigation size={27} className="text-[#69a8a3]" /><h2 className="mt-4 text-[21px] font-semibold">No destination selected</h2><p className="mt-3 text-[13px] leading-6 text-[#a5afac]">Choose a destination on Home before checking a drive.</p><button type="button" onClick={() => router.push("/")} className="primary-button mt-5">Check a drive <ArrowUpRight size={18} /></button>
+          </section>
+        ) : loading ? (
           <AnalysisLoading />
         ) : requestError || !analysis ? (
           <section className="glass card section-block p-6">

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import BottomNav from "@/components/BottomNav";
 import DataAttribution from "@/components/DataAttribution";
+import DriveEmptyState from "@/components/DriveEmptyState";
 import { useLiveLocation } from "@/hooks/use-live-location";
 import { useWarningAnnouncer } from "@/hooks/use-warning-announcer";
 import { calculateRouteProgress, upcomingWarnings } from "@/lib/route-progress";
@@ -15,13 +16,17 @@ import type { AnalyseRouteResponse } from "@/types/analysis";
 export default function DrivePage() {
   const router = useRouter();
   const [result, setResult] = useState<AnalyseRouteResponse>();
+  const [restored, setRestored] = useState(false);
   const [started, setStarted] = useState(false);
   const [muted, setMuted] = useState(false);
   const { status, location, start, stop } = useLiveLocation();
 
   useEffect(() => {
     const stored = readRouteAnalysis();
-    queueMicrotask(() => setResult(stored));
+    queueMicrotask(() => {
+      setResult(stored);
+      setRestored(true);
+    });
   }, []);
 
   const routeProgress = useMemo(() => result?.route.geometry && location
@@ -49,6 +54,9 @@ export default function DrivePage() {
     router.push("/");
   }
 
+  if (!restored) return <DriveRestoreLoading />;
+  if (!result) return <DriveEmptyState onCheckDrive={() => router.push("/")} onJustDrive={() => router.push("/just-drive")} />;
+
   return <><main className="page-shell"><header className="flex items-center justify-between"><div className="glass flex h-13 w-13 items-center justify-center rounded-full border-[#d48c6b]/30 text-[#d48c6b]"><Route size={20} /></div><div className="flex items-center gap-2 text-[9px] uppercase tracking-[.14em] text-[#77dcb3]"><span className={`h-1.5 w-1.5 rounded-full ${status === "active" ? "breathing bg-[#34d399]" : "bg-[#82908d]"}`} />{gpsLabel(started, status)}</div><button onClick={endDrive} aria-label="End drive mode" className="glass flex h-11 w-11 items-center justify-center rounded-[17px] text-[#9ca7a4]"><X size={19} /></button></header>
 
     <section className="mt-10 text-center"><div className="text-[10px] uppercase tracking-[.2em] text-[#7d8a87]">Driving to</div><div className="mt-3 text-[38px] font-light leading-tight tracking-[-0.055em]">{route?.destination.name ?? "No route loaded"}</div><div className="mt-2 text-[12px] text-[#8e9b98]">{remainingKm !== undefined ? `${remainingKm.toFixed(1)} km remaining` : route ? "Route progress paused" : "Run a route check before opening Drive Mode"}</div><div className="mx-auto mt-7 h-px w-[72%] bg-gradient-to-r from-transparent via-[#69a8a3]/40 to-transparent" /><div className="mt-5 text-[10px] uppercase tracking-[.13em] text-[#7d8a87]">GPS speed</div><div className="mt-1 text-[58px] font-light tracking-[-.06em]">{location?.speedKmh !== undefined ? Math.round(location.speedKmh) : "--"}<span className="ml-2 text-[12px] tracking-normal text-[#7d8a87]">km/h</span></div></section>
@@ -58,6 +66,10 @@ export default function DrivePage() {
     <div className="action-stack">{!started && <button disabled={!route} onClick={beginDrive} className="primary-button disabled:cursor-not-allowed disabled:opacity-40">Start Drive Mode <Play size={18} /></button>}<div className="grid grid-cols-2 gap-2.5"><button onClick={() => setMuted((value) => !value)} className="glass card flex items-center justify-center gap-2 py-4 text-[12px]">{muted ? <VolumeX size={17} className="text-[#d48c6b]" /> : <Volume2 size={17} className="text-[#69a8a3]" />}{muted ? "Unmute" : "Mute"}</button><button onClick={() => route && openMaps(route.origin.name, route.destination.name)} disabled={!route} className="glass card flex items-center justify-center gap-2 py-4 text-[12px] disabled:opacity-40"><Navigation size={17} className="text-[#69a8a3]" />Open Maps</button></div>{started && <button onClick={endDrive} className="glass flex w-full items-center justify-center gap-2 rounded-[22px] py-4 text-[12px] text-[#d8b09d]"><X size={16} />End drive</button>}</div>
 
     <section className="surface-panel section-block p-4 text-[10px] leading-5 text-[#7f8c89]">Web prototype: background GPS and spoken warnings may pause when your phone is locked or another app is in the foreground.</section><DataAttribution includeImo /></main><BottomNav /></>;
+}
+
+function DriveRestoreLoading() {
+  return <><main className="page-shell"><div className="glass h-13 w-13 animate-pulse rounded-full" /><section className="glass card section-block-lg h-64 animate-pulse" aria-label="Restoring active drive" /></main><BottomNav /></>;
 }
 
 function DriveStatusCard({ started, status, progressStatus, primary }: {

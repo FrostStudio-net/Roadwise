@@ -27,7 +27,7 @@ Roadwise is an Iceland-specific driving assistant built with Next.js, TypeScript
    npm run dev
    ```
 
-4. Open `http://localhost:3000`, enter `Vík`, keep the origin as Reykjavík, select a vehicle, and choose the route-check action.
+4. Open `http://localhost:3000`, enter a destination, keep the origin as Reykjavík, select a vehicle, and choose the route-check action.
 
 The Mapbox token is read only inside server services and is not exposed with a `NEXT_PUBLIC_` prefix. It must be allowed to use Mapbox Search Box, Geocoding, and Directions. Keep it out of source control and apply the narrowest restrictions compatible with requests from your deployment environment.
 
@@ -48,7 +48,7 @@ Destination autocomplete uses server-proxied Mapbox Search Box `/suggest` and `/
 ```json
 {
   "origin": "Reykjavík",
-  "destination": "Vík",
+  "destination": "Akureyri",
   "vehicle": "Small car (2WD)"
 }
 ```

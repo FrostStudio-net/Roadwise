@@ -15,6 +15,11 @@ export const ROAD_MAP_CONFIG = {
   sourceStaleAfterMinutes: RISK_THRESHOLDS.freshness.roadDataStaleAfterMinutes,
 } as const;
 
+export const ROAD_MAP_DEFAULT_VIEW = {
+  center: [-18.8, 64.85] as Coordinates,
+  zoom: 4.65,
+} as const;
+
 const STATUS_RANK: Record<RoadMapStatus, number> = { unknown: 0, normal: 1, caution: 2, difficult: 3, closed: 4 };
 
 export function normalizeRoadMapStatus(state: RoadConditionState): RoadMapStatus {

@@ -22,11 +22,16 @@ export default function HomePage() {
 
   function navigateToCheck(place?: GeocodedPlace) {
     if (navigationPending.current) return;
+    const selected = place ?? selectedDestination;
+    const destinationName = (selected?.name ?? destination).trim();
+    if (!destinationName) {
+      setNavigationError("Enter a destination before checking this drive.");
+      return;
+    }
     navigationPending.current = true;
     setChecking(true);
     setNavigationError(undefined);
-    const selected = place ?? selectedDestination;
-    const params = new URLSearchParams({ destination: selected?.name ?? (destination || "Vík"), vehicle });
+    const params = new URLSearchParams({ destination: destinationName, vehicle });
     if (selected?.mapboxId) params.set("destinationId", selected.mapboxId);
     try {
       router.push(`/check?${params.toString()}`);
