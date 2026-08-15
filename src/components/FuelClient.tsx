@@ -6,8 +6,9 @@ import type { GeoJSONSource, Map as MapboxMap, MapLayerMouseEvent, Marker } from
 
 import BottomNav from "@/components/BottomNav";
 import AppHeader from "@/components/AppHeader";
+import MapDiagnosticStatus from "@/components/MapDiagnosticStatus";
 import VehicleSelector from "@/components/VehicleSelector";
-import { developmentMapError, mapContainerHasSize, observeMapSize } from "@/lib/client-map";
+import { developmentMapError, initialMapDiagnostics, mapContainerHasSize, observeMapSize, sanitizeMapError } from "@/lib/client-map";
 import { detectLongServiceGaps, filterServicePois, FUEL_SERVICE_CONFIG, matchServicePoisToRoute, nearestServicePois, routeProgressAt } from "@/lib/fuel-services";
 import { readRouteAnalysis } from "@/lib/route-analysis-storage";
 import type { VehicleType } from "@/types/analysis";
@@ -32,7 +33,9 @@ export default function FuelClient({ initialSnapshot, initialVehicle, mapConfigu
   const [storedRoute, setStoredRoute] = useState<StoredServiceRoute>();
   const [selected, setSelected] = useState<DisplayPoi>();
   const [mapReady, setMapReady] = useState(false);
+  const [mapLayersReady, setMapLayersReady] = useState(false);
   const [mapError, setMapError] = useState<string>();
+  const [mapDiagnostics, setMapDiagnostics] = useState(() => initialMapDiagnostics(mapConfigured));
 
   useEffect(() => {
     const analysis = readRouteAnalysis();
@@ -75,65 +78,90 @@ export default function FuelClient({ initialSnapshot, initialVehicle, mapConfigu
     let disposed = false;
     let map: MapboxMap | undefined;
     let stopObservingSize: (() => void) | undefined;
-    let loaded = false;
+    let styleReady = false;
+    let layersInstalled = false;
     const timeout = window.setTimeout(() => {
-      if (!loaded) {
+      if (!styleReady) {
         developmentMapError("fuel", "initialization timed out");
+        setMapDiagnostics((current) => ({ ...current, mapErrorCode: "timeout", mapErrorMessage: "Map style did not load within 12 seconds." }));
         setMapError("The service map took too long to load. The station list remains available.");
       }
     }, 12_000);
     void import("mapbox-gl").then(({ default: mapboxgl }) => {
       const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN?.trim();
       const container = mapContainer.current;
-      if (!token) { window.clearTimeout(timeout); setMapError("A restricted public Mapbox token is required. The station list remains available."); return; }
+      if (!token) { window.clearTimeout(timeout); setMapDiagnostics((current) => ({ ...current, mapErrorCode: "token-missing", mapErrorMessage: "NEXT_PUBLIC_MAPBOX_TOKEN was not configured at build time." })); setMapError("A restricted public Mapbox token is required. The station list remains available."); return; }
       if (disposed || !container) return;
-      if (!mapboxgl.supported()) { window.clearTimeout(timeout); setMapError("This browser does not support the WebGL map. The station list remains available."); return; }
-      if (!mapContainerHasSize(container)) { window.clearTimeout(timeout); developmentMapError("fuel", "container has no size"); setMapError("The service map could not be sized. The station list remains available."); return; }
+      const bounds = container.getBoundingClientRect();
+      setMapDiagnostics((current) => ({ ...current, tokenConfigured: true, containerWidth: Math.round(bounds.width), containerHeight: Math.round(bounds.height) }));
+      if (!mapboxgl.supported()) { window.clearTimeout(timeout); setMapDiagnostics((current) => ({ ...current, mapErrorCode: "webgl-unsupported", mapErrorMessage: "Mapbox GL reported that WebGL is unavailable." })); setMapError("This browser does not support the WebGL map. The station list remains available."); return; }
+      if (!mapContainerHasSize(container)) { window.clearTimeout(timeout); developmentMapError("fuel", "container has no size"); setMapDiagnostics((current) => ({ ...current, mapErrorCode: "container-size", mapErrorMessage: `Map container measured ${Math.round(bounds.width)}×${Math.round(bounds.height)}.` })); setMapError("The service map could not be sized. The station list remains available."); return; }
       try {
         map = new mapboxgl.Map({ container, accessToken: token, style: "mapbox://styles/mapbox/dark-v11", center: [-18.8, 64.85], zoom: 4.65, minZoom: 4, maxZoom: 16, attributionControl: false });
       } catch (error) {
+        window.clearTimeout(timeout);
         developmentMapError("fuel", "constructor failed", error);
+        const sanitized = sanitizeMapError(error);
+        setMapDiagnostics((current) => ({ ...current, mapErrorCode: sanitized.code ?? "constructor", mapErrorMessage: sanitized.message }));
         setMapError("The service map could not be initialized. The station list remains available.");
         return;
       }
       mapRef.current = map;
+      setMapDiagnostics((current) => ({ ...current, mapCreated: true }));
       stopObservingSize = observeMapSize(map, container);
       map.addControl(new mapboxgl.AttributionControl({ compact: true }), "bottom-right");
-      map.on("error", (event) => { developmentMapError("fuel", "Mapbox GL error", event.error); if (!loaded) setMapError("The service map could not be loaded. Check the public token restrictions. The station list remains available."); });
-      map.on("load", () => {
-        if (!map) return;
-        loaded = true;
+      map.on("style.load", () => {
+        if (!map || layersInstalled) return;
+        styleReady = true;
         window.clearTimeout(timeout);
         setMapError(undefined);
-        map.resize();
-        for (const layer of map.getStyle().layers ?? []) if (layer.type === "symbol" && /(poi|transit|airport)/i.test(layer.id)) map.setLayoutProperty(layer.id, "visibility", "none");
-        map.addSource("service-pois", { type: "geojson", cluster: true, clusterMaxZoom: 9, clusterRadius: 45, data: poiFeatureCollection(initialSnapshot.data) });
-        map.addLayer({ id: "service-clusters", type: "circle", source: "service-pois", filter: ["has", "point_count"], paint: { "circle-color": "#172424", "circle-stroke-color": "#69a8a3", "circle-stroke-width": 1.5, "circle-radius": ["step", ["get", "point_count"], 15, 15, 19, 50, 23] } });
-        map.addLayer({ id: "service-cluster-count", type: "symbol", source: "service-pois", filter: ["has", "point_count"], layout: { "text-field": ["get", "point_count_abbreviated"], "text-size": 10 }, paint: { "text-color": "#f5f1eb" } });
-        map.addLayer({ id: "service-points", type: "symbol", source: "service-pois", filter: ["!", ["has", "point_count"]], layout: { "text-field": ["get", "icon"], "text-size": 14, "text-allow-overlap": false }, paint: { "text-color": ["match", ["get", "type"], "ev", "#69a8a3", "#d48c6b"], "text-halo-color": "#101818", "text-halo-width": 2 } });
-        map.addSource("service-route", { type: "geojson", data: emptyFeatureCollection() });
-        map.addLayer({ id: "service-route-line", type: "line", source: "service-route", paint: { "line-color": "#69a8a3", "line-width": 3, "line-opacity": 0.72, "line-dasharray": [2, 1.5] } });
-        bindServiceMap(map, initialSnapshot.data, setSelected);
         setMapReady(true);
+        setMapDiagnostics((current) => ({ ...current, styleLoaded: true }));
+        map.resize();
+        try {
+          for (const layer of map.getStyle().layers ?? []) if (layer.type === "symbol" && /(poi|transit|airport)/i.test(layer.id)) map.setLayoutProperty(layer.id, "visibility", "none");
+          map.addSource("service-pois", { type: "geojson", cluster: true, clusterMaxZoom: 9, clusterRadius: 45, data: poiFeatureCollection(initialSnapshot.data) });
+          map.addLayer({ id: "service-clusters", type: "circle", source: "service-pois", filter: ["has", "point_count"], paint: { "circle-color": "#172424", "circle-stroke-color": "#69a8a3", "circle-stroke-width": 1.5, "circle-radius": ["step", ["get", "point_count"], 15, 15, 19, 50, 23] } });
+          map.addLayer({ id: "service-cluster-count", type: "symbol", source: "service-pois", filter: ["has", "point_count"], layout: { "text-field": ["get", "point_count_abbreviated"], "text-size": 10 }, paint: { "text-color": "#f5f1eb" } });
+          map.addLayer({ id: "service-points", type: "symbol", source: "service-pois", filter: ["!", ["has", "point_count"]], layout: { "text-field": ["get", "icon"], "text-size": 14, "text-allow-overlap": false }, paint: { "text-color": ["match", ["get", "type"], "ev", "#69a8a3", "#d48c6b"], "text-halo-color": "#101818", "text-halo-width": 2 } });
+          map.addSource("service-route", { type: "geojson", data: emptyFeatureCollection() });
+          map.addLayer({ id: "service-route-line", type: "line", source: "service-route", paint: { "line-color": "#69a8a3", "line-width": 3, "line-opacity": 0.72, "line-dasharray": [2, 1.5] } });
+          bindServiceMap(map, initialSnapshot.data, setSelected);
+          layersInstalled = true;
+          setMapLayersReady(true);
+        } catch (error) {
+          const sanitized = sanitizeMapError(error);
+          developmentMapError("fuel", "Roadwise layer setup failed", error);
+          setMapDiagnostics((current) => ({ ...current, mapErrorCode: sanitized.code ?? "layer-setup", mapErrorMessage: sanitized.message }));
+        }
       });
-    }).catch((error) => { developmentMapError("fuel", "module or initialization failed", error); setMapError("The service map could not be loaded. The station list remains available."); });
+      map.on("error", (event) => {
+        const sanitized = sanitizeMapError(event.error);
+        developmentMapError("fuel", "Mapbox GL error", event.error);
+        setMapDiagnostics((current) => ({ ...current, mapErrorCode: sanitized.code, mapErrorMessage: sanitized.message }));
+        if (!styleReady) setMapError("The service map could not be loaded. Check the public token restrictions. The station list remains available.");
+      });
+      map.on("load", () => {
+        setMapDiagnostics((current) => ({ ...current, styleLoaded: true, mapLoaded: true }));
+      });
+    }).catch((error) => { window.clearTimeout(timeout); const sanitized = sanitizeMapError(error); developmentMapError("fuel", "module or initialization failed", error); setMapDiagnostics((current) => ({ ...current, mapErrorCode: sanitized.code ?? "module-load", mapErrorMessage: sanitized.message })); setMapError("The service map could not be loaded. The station list remains available."); });
     return () => { disposed = true; window.clearTimeout(timeout); stopObservingSize?.(); userMarker.current?.remove(); map?.remove(); mapRef.current = undefined; };
   }, [initialSnapshot.available, initialSnapshot.data, mapConfigured]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!mapReady || !map) return;
+    if (!mapLayersReady || !map) return;
     (map.getSource("service-pois") as GeoJSONSource).setData(poiFeatureCollection(mapPois));
-  }, [mapPois, mapReady]);
+  }, [mapLayersReady, mapPois]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!mapReady || !map) return;
+    if (!mapLayersReady || !map) return;
     const source = map.getSource("service-route") as GeoJSONSource;
     source.setData(storedRoute ? { type: "Feature", properties: {}, geometry: storedRoute.geometry } : emptyFeatureCollection());
     map.setLayoutProperty("service-route-line", "visibility", mode === "route" && storedRoute ? "visible" : "none");
     if (mode === "route" && storedRoute) fitRoute(map, storedRoute.geometry);
-  }, [mapReady, mode, storedRoute]);
+  }, [mapLayersReady, mode, storedRoute]);
 
   const changeVehicle = useCallback((next: VehicleType) => {
     setVehicle(next);
@@ -157,6 +185,9 @@ export default function FuelClient({ initialSnapshot, initialVehicle, mapConfigu
     }, (error) => setLocationStatus(error.code === error.PERMISSION_DENIED ? "Location permission was denied." : "Your location could not be found."), { enableHighAccuracy: true, maximumAge: 10_000, timeout: 15_000 });
   }
 
+  const mapFailed = !mapConfigured || Boolean(mapError) || !initialSnapshot.available;
+  const mapLoading = !mapFailed && !mapReady;
+
   return <><main className="page-shell"><AppHeader title="Fuel / EV" subtitle="Roadwise-listed service stops" /><p className="mt-4 max-w-[410px] text-[12px] leading-5 text-[#95a19e]">Find fuel stations and EV chargers nearby or close to your last checked route.</p>
 
     {!initialSnapshot.available ? <section className="surface-panel section-block flex gap-3 p-4"><CloudOff size={20} className="shrink-0 text-[#d48c6b]" /><div><div className="text-[13px] font-semibold">Service-stop data unavailable</div><p className="mt-1 text-[11px] leading-5 text-[#8e9b98]">{initialSnapshot.error ?? "OpenStreetMap fuel and charging data could not be loaded."} No substitute stations are shown.</p></div></section> : null}
@@ -172,7 +203,7 @@ export default function FuelClient({ initialSnapshot, initialVehicle, mapConfigu
 
     <section className="section-block"><div className="mb-3 flex items-end justify-between"><div><div className="eyebrow">{mode === "nearby" ? "Nearby services" : "Driving order"}</div><h2 className="mt-1 text-[19px] font-semibold">{mode === "nearby" ? "Closest useful stops" : "Along your checked route"}</h2></div>{searchedPois.length ? <span className="text-[10px] text-[#82908d]">{searchedPois.length} listed</span> : null}</div><ServiceList mode={mode} hasLocation={Boolean(location)} hasRoute={Boolean(storedRoute)} sourceAvailable={initialSnapshot.available} pois={searchedPois} onSelect={setSelected} /></section>
 
-    <section className="section-block"><div className={`glass map-skeleton relative overflow-hidden rounded-[28px] ${!mapConfigured || mapError || !initialSnapshot.available ? "h-[220px]" : "h-[min(46dvh,400px)] min-h-[300px]"}`} role="region" aria-label="Fuel and EV service map"><div ref={mapContainer} className="absolute inset-0" />{!mapConfigured || mapError || !initialSnapshot.available ? <div className="absolute inset-0 z-10 flex items-center justify-center p-7 text-center"><div><CloudOff size={25} className="mx-auto text-[#d48c6b]" /><div className="mt-3 text-[13px] font-semibold">Map unavailable</div><p className="mt-2 text-[10px] leading-5 text-[#82908d]">{mapError ?? (!mapConfigured ? "A restricted public Mapbox token is required. The list remains available." : "Service-stop data is unavailable.")}</p></div></div> : null}{mapConfigured && initialSnapshot.available && !mapReady && !mapError ? <div className="absolute inset-0 flex items-center justify-center"><div className="text-center"><Navigation size={23} className="mx-auto animate-pulse text-[#69a8a3]" /><p className="mt-3 text-[12px] text-[#aab3b0]">Loading map…</p></div></div> : null}</div></section>
+    <section className="section-block"><div className={`glass relative overflow-hidden rounded-[28px] ${mapLoading ? "map-skeleton h-[min(46dvh,400px)] min-h-[300px]" : mapFailed ? "h-auto min-h-[168px] bg-[#0d1515]" : "h-[min(46dvh,400px)] min-h-[300px] bg-[#0d1515]"}`} role="region" aria-label="Fuel and EV service map"><div ref={mapContainer} className="absolute inset-0" />{mapFailed ? <div className="relative z-10 flex min-h-[168px] items-center justify-center p-5 text-center"><div className="w-full max-w-[330px]"><CloudOff size={23} className="mx-auto text-[#d48c6b]" /><div className="mt-2 text-[13px] font-semibold">Map unavailable</div><p className="mt-1 text-[10px] leading-5 text-[#82908d]">Service list is still available below.</p><MapDiagnosticStatus status={mapDiagnostics} /></div></div> : null}{mapLoading ? <div className="absolute inset-0 flex items-center justify-center"><div className="w-full max-w-[330px] px-5 text-center"><Navigation size={23} className="mx-auto animate-pulse text-[#69a8a3]" /><p className="mt-3 text-[12px] text-[#aab3b0]">Loading map…</p><MapDiagnosticStatus status={mapDiagnostics} /></div></div> : null}</div></section>
 
     <section className="surface-panel section-block p-4 text-[10px] leading-5 text-[#82908d]"><p>Fuel and charging POIs: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="text-[#a9c9c5] underline underline-offset-2">© OpenStreetMap contributors</a>, available under ODbL. Community mapping may be incomplete or outdated.</p><p className="mt-1">Roadwise does not provide live charger availability, fuel inventory or prices. Verify listed opening, connector and output details with the provider.</p>{initialSnapshot.updatedAt ? <p className="mt-1">Source snapshot: {formatTimestamp(initialSnapshot.updatedAt)}.</p> : null}</section>
   </main>{selectedWithDistance ? <PoiDetail poi={selectedWithDistance} onClose={() => setSelected(undefined)} /> : null}<BottomNav hidden={searchFocused} /></>;

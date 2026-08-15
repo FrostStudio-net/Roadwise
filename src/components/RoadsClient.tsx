@@ -20,7 +20,8 @@ import type { FilterSpecification, GeoJSONSource, Map as MapboxMap, MapLayerMous
 import BottomNav from "@/components/BottomNav";
 import AppHeader from "@/components/AppHeader";
 import DataAttribution from "@/components/DataAttribution";
-import { developmentMapError, mapContainerHasSize, observeMapSize } from "@/lib/client-map";
+import MapDiagnosticStatus from "@/components/MapDiagnosticStatus";
+import { developmentMapError, initialMapDiagnostics, mapContainerHasSize, observeMapSize, sanitizeMapError } from "@/lib/client-map";
 import { matchRoadSectionDetails, ROAD_MAP_DEFAULT_VIEW, roadMapStatusLabel } from "@/lib/road-map";
 import type { RoadMapCamera, RoadMapFilter, RoadMapIncident, RoadMapObservation, RoadMapPayload, RoadMapSection } from "@/types/road-map";
 
@@ -54,7 +55,9 @@ export default function RoadsClient({ initialData, mapConfigured }: { initialDat
   const [filter, setFilter] = useState<RoadMapFilter>("all");
   const [selection, setSelection] = useState<Selection>();
   const [mapReady, setMapReady] = useState(false);
+  const [mapLayersReady, setMapLayersReady] = useState(false);
   const [mapError, setMapError] = useState<string>();
+  const [mapDiagnostics, setMapDiagnostics] = useState(() => initialMapDiagnostics(mapConfigured));
   const [locationStatus, setLocationStatus] = useState<string>();
   const [attentionOpen, setAttentionOpen] = useState(false);
   const [attentionFilter, setAttentionFilter] = useState<AttentionFilter>("closed");
@@ -64,10 +67,12 @@ export default function RoadsClient({ initialData, mapConfigured }: { initialDat
     let disposed = false;
     let map: MapboxMap | undefined;
     let stopObservingSize: (() => void) | undefined;
-    let loaded = false;
+    let styleReady = false;
+    let layersInstalled = false;
     const timeout = window.setTimeout(() => {
-      if (!loaded) {
+      if (!styleReady) {
         developmentMapError("roads", "initialization timed out");
+        setMapDiagnostics((current) => ({ ...current, mapErrorCode: "timeout", mapErrorMessage: "Map style did not load within 12 seconds." }));
         setMapError("The interactive map took too long to load. Official conditions remain available below.");
       }
     }, 12_000);
@@ -75,9 +80,11 @@ export default function RoadsClient({ initialData, mapConfigured }: { initialDat
       const container = mapContainer.current;
       if (disposed || !container) return;
       const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN?.trim();
-      if (!token) { window.clearTimeout(timeout); setMapError("A restricted public Mapbox token is required. Official conditions remain available below."); return; }
-      if (!mapboxgl.supported()) { window.clearTimeout(timeout); setMapError("This browser does not support the WebGL map. Official conditions remain available below."); return; }
-      if (!mapContainerHasSize(container)) { window.clearTimeout(timeout); developmentMapError("roads", "container has no size"); setMapError("The interactive map could not be sized. Official conditions remain available below."); return; }
+      if (!token) { window.clearTimeout(timeout); setMapDiagnostics((current) => ({ ...current, mapErrorCode: "token-missing", mapErrorMessage: "NEXT_PUBLIC_MAPBOX_TOKEN was not configured at build time." })); setMapError("A restricted public Mapbox token is required. Official conditions remain available below."); return; }
+      if (!mapboxgl.supported()) { window.clearTimeout(timeout); setMapDiagnostics((current) => ({ ...current, mapErrorCode: "webgl-unsupported", mapErrorMessage: "Mapbox GL reported that WebGL is unavailable." })); setMapError("This browser does not support the WebGL map. Official conditions remain available below."); return; }
+      const bounds = container.getBoundingClientRect();
+      setMapDiagnostics((current) => ({ ...current, tokenConfigured: true, containerWidth: Math.round(bounds.width), containerHeight: Math.round(bounds.height) }));
+      if (!mapContainerHasSize(container)) { window.clearTimeout(timeout); developmentMapError("roads", "container has no size"); setMapDiagnostics((current) => ({ ...current, mapErrorCode: "container-size", mapErrorMessage: `Map container measured ${Math.round(bounds.width)}×${Math.round(bounds.height)}.` })); setMapError("The interactive map could not be sized. Official conditions remain available below."); return; }
       try {
         map = new mapboxgl.Map({
           container,
@@ -92,29 +99,46 @@ export default function RoadsClient({ initialData, mapConfigured }: { initialDat
       } catch (error) {
         window.clearTimeout(timeout);
         developmentMapError("roads", "constructor failed", error);
+        const sanitized = sanitizeMapError(error);
+        setMapDiagnostics((current) => ({ ...current, mapErrorCode: sanitized.code ?? "constructor", mapErrorMessage: sanitized.message }));
         setMapError("The interactive map could not be initialized. Official conditions remain available below.");
         return;
       }
       mapRef.current = map;
+      setMapDiagnostics((current) => ({ ...current, mapCreated: true }));
       stopObservingSize = observeMapSize(map, container);
       map.addControl(new mapboxgl.AttributionControl({ compact: true }), "bottom-right");
-      map.on("error", (event) => {
-        developmentMapError("roads", "Mapbox GL error", event.error);
-        if (!loaded) setMapError("The interactive map could not be loaded. Check the public token restrictions. Official conditions remain available below.");
-      });
-      map.on("load", () => {
-        if (!map) return;
-        loaded = true;
+      map.on("style.load", () => {
+        if (!map || layersInstalled) return;
+        styleReady = true;
         window.clearTimeout(timeout);
         setMapError(undefined);
-        map.resize();
-        reduceBaseMapClutter(map);
-        addRoadLayers(map, initialData);
-        addPointLayers(map, initialData);
-        bindMapInteractions(map, initialData, setSelection);
         setMapReady(true);
+        setMapDiagnostics((current) => ({ ...current, styleLoaded: true }));
+        map.resize();
+        try {
+          reduceBaseMapClutter(map);
+          addRoadLayers(map, initialData);
+          addPointLayers(map, initialData);
+          bindMapInteractions(map, initialData, setSelection);
+          layersInstalled = true;
+          setMapLayersReady(true);
+        } catch (error) {
+          const sanitized = sanitizeMapError(error);
+          developmentMapError("roads", "Roadwise layer setup failed", error);
+          setMapDiagnostics((current) => ({ ...current, mapErrorCode: sanitized.code ?? "layer-setup", mapErrorMessage: sanitized.message }));
+        }
       });
-    }).catch((error) => { window.clearTimeout(timeout); developmentMapError("roads", "module or initialization failed", error); setMapError("The interactive map could not be loaded. Official conditions remain available below."); });
+      map.on("error", (event) => {
+        const sanitized = sanitizeMapError(event.error);
+        developmentMapError("roads", "Mapbox GL error", event.error);
+        setMapDiagnostics((current) => ({ ...current, mapErrorCode: sanitized.code, mapErrorMessage: sanitized.message }));
+        if (!styleReady) setMapError("The interactive map could not be loaded. Check the public token restrictions. Official conditions remain available below.");
+      });
+      map.on("load", () => {
+        setMapDiagnostics((current) => ({ ...current, styleLoaded: true, mapLoaded: true }));
+      });
+    }).catch((error) => { window.clearTimeout(timeout); const sanitized = sanitizeMapError(error); developmentMapError("roads", "module or initialization failed", error); setMapDiagnostics((current) => ({ ...current, mapErrorCode: sanitized.code ?? "module-load", mapErrorMessage: sanitized.message })); setMapError("The interactive map could not be loaded. Official conditions remain available below."); });
     return () => {
       disposed = true;
       window.clearTimeout(timeout);
@@ -127,7 +151,7 @@ export default function RoadsClient({ initialData, mapConfigured }: { initialDat
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !mapReady) return;
+    if (!map || !mapLayersReady) return;
     const sectionFilter = filter === "closures"
       ? ["==", ["get", "status"], "closed"] as FilterSpecification
       : filter === "difficult"
@@ -138,7 +162,7 @@ export default function RoadsClient({ initialData, mapConfigured }: { initialDat
     setLayerGroupVisibility(map, POINT_LAYER_GROUPS.incidents, filter === "all" || filter === "incidents");
     setLayerGroupVisibility(map, POINT_LAYER_GROUPS.weather, filter === "weather");
     setLayerGroupVisibility(map, POINT_LAYER_GROUPS.cameras, filter === "all" || filter === "cameras");
-  }, [filter, mapReady]);
+  }, [filter, mapLayersReady]);
 
   async function locateMe() {
     const map = mapRef.current;
@@ -173,6 +197,8 @@ export default function RoadsClient({ initialData, mapConfigured }: { initialDat
     !initialData.sources.weather ? "roadside observations" : undefined,
     !initialData.sources.cameras ? "cameras" : undefined,
   ].filter((value): value is string => Boolean(value));
+  const mapFailed = !mapConfigured || Boolean(mapError);
+  const mapLoading = !mapFailed && !mapReady;
 
   return (
     <>
@@ -183,13 +209,13 @@ export default function RoadsClient({ initialData, mapConfigured }: { initialDat
         <section className="mt-5">
           <div className="grid grid-cols-3 gap-2" aria-label="Map filters">{FILTERS.map(({ id, label }) => <button key={id} type="button" aria-pressed={filter === id} onClick={() => setFilter(id)} className={`min-h-10 rounded-full border px-2 text-[10px] font-semibold transition ${filter === id ? "border-[#69a8a3]/45 bg-[#2d6b6b]/35 text-[#d7e5e2]" : "border-white/[.08] bg-white/[.035] text-[#8f9c99]"}`}>{label}</button>)}</div>
 
-          <div className={`glass map-skeleton relative mt-3 overflow-hidden rounded-[28px] border-white/[.1] ${mapConfigured && !mapError ? "h-[min(58dvh,520px)] min-h-[390px]" : "h-[240px]"}`} role="region" aria-label="Interactive Iceland road-condition map">
+          <div className={`glass relative mt-3 overflow-hidden rounded-[28px] border-white/[.1] ${mapLoading ? "map-skeleton h-[min(58dvh,520px)] min-h-[390px]" : mapFailed ? "h-auto min-h-[168px] bg-[#0d1515]" : "h-[min(58dvh,520px)] min-h-[390px] bg-[#0d1515]"}`} role="region" aria-label="Interactive Iceland road-condition map">
             <div ref={mapContainer} className="absolute inset-0" />
-            {!mapConfigured || mapError ? <MapFallback message={mapError ?? "Add a restricted NEXT_PUBLIC_MAPBOX_TOKEN to enable the interactive map."} /> : null}
-            {mapConfigured && !mapReady && !mapError ? <div className="absolute inset-0 flex items-center justify-center"><div className="text-center"><Navigation size={25} className="mx-auto animate-pulse text-[#69a8a3]" /><p className="mt-3 text-[12px] font-medium text-[#aab3b0]">Loading map…</p><p className="mt-1 text-[10px] text-[#71807c]">Official sections and map layers</p></div></div> : null}
+            {mapFailed ? <MapFallback diagnostics={mapDiagnostics} /> : null}
+            {mapLoading ? <div className="absolute inset-0 flex items-center justify-center"><div className="w-full max-w-[330px] px-5 text-center"><Navigation size={25} className="mx-auto animate-pulse text-[#69a8a3]" /><p className="mt-3 text-[12px] font-medium text-[#aab3b0]">Loading map…</p><p className="mt-1 text-[10px] text-[#71807c]">Official sections and map layers</p><MapDiagnosticStatus status={mapDiagnostics} /></div></div> : null}
             {mapReady ? <button type="button" onClick={locateMe} aria-label="Locate me" className="glass absolute right-3 top-3 z-10 flex h-12 w-12 items-center justify-center rounded-[18px] bg-[#111a1a]/90 text-[#e8c4b0]"><Crosshair size={20} /></button> : null}
             {locationStatus ? <div className="glass absolute left-3 top-3 z-10 max-w-[calc(100%-5rem)] rounded-full bg-[#111a1a]/90 px-3 py-2 text-[10px] text-[#c0c9c6]">{locationStatus}</div> : null}
-            <div className="pointer-events-none absolute bottom-7 left-3 z-10 grid gap-1.5"><Legend color="#ef8e76" label="Road closed" /><Legend color="#d48c6b" label="Difficult conditions" /><Legend color="#e8c4b0" label="Use caution" /><Legend color="#4d8f8a" label="Normal conditions reported" /></div>
+            {mapLayersReady ? <div className="pointer-events-none absolute bottom-7 left-3 z-10 grid gap-1.5"><Legend color="#ef8e76" label="Road closed" /><Legend color="#d48c6b" label="Difficult conditions" /><Legend color="#e8c4b0" label="Use caution" /><Legend color="#4d8f8a" label="Normal conditions reported" /></div> : null}
           </div>
         </section>
 
@@ -306,7 +332,7 @@ function ObservationValues({ observation }: { observation: RoadMapObservation })
 function DetailGrid({ items }: { items: string[][] }) { return <div className="mt-5 grid grid-cols-2 gap-2">{items.map(([label, value]) => <div key={label} className="rounded-[16px] bg-white/[.035] p-3"><div className="text-[9px] uppercase tracking-[.1em] text-[#82908d]">{label}</div><div className="mt-1 text-[11px] font-semibold capitalize">{value}</div></div>)}</div>; }
 function DetailBlock({ title, children }: { title: string; children: React.ReactNode }) { return <section className="mt-5 border-t border-white/[.07] pt-4"><div className="text-[9px] font-semibold uppercase tracking-[.12em] text-[#e8c4b0]">{title}</div><div className="mt-2 text-[11px] leading-5 text-[#aab3b0]">{children}</div></section>; }
 function SafetyCopy() { return <p className="mt-5 text-[10px] leading-5 text-[#82908d]">Roadwise reports available official information and never determines that a road is safe.</p>; }
-function MapFallback({ message }: { message: string }) { return <div className="absolute inset-0 z-20 flex items-center justify-center bg-[radial-gradient(circle_at_50%_40%,rgba(45,107,107,.25),#0d1515_66%)] p-8 text-center"><div><CloudOff size={27} className="mx-auto text-[#d48c6b]" /><div className="mt-3 text-[14px] font-semibold">Map unavailable</div><p className="mx-auto mt-2 max-w-[280px] text-[11px] leading-5 text-[#8e9b98]">{message}</p></div></div>; }
+function MapFallback({ diagnostics }: { diagnostics: ReturnType<typeof initialMapDiagnostics> }) { return <div className="relative z-20 flex min-h-[168px] items-center justify-center p-5 text-center"><div className="w-full max-w-[330px]"><CloudOff size={23} className="mx-auto text-[#d48c6b]" /><div className="mt-2 text-[13px] font-semibold">Map unavailable</div><p className="mt-1 text-[10px] leading-5 text-[#82908d]">Official conditions list is still available below.</p><MapDiagnosticStatus status={diagnostics} /></div></div>; }
 function Legend({ color, label }: { color: string; label: string }) { return <div className="glass flex w-fit items-center gap-2 rounded-full bg-[#101818]/85 px-2.5 py-1.5 text-[8px] text-[#b4bdb9]"><span className="h-1.5 w-4 rounded-full" style={{ backgroundColor: color }} />{label}</div>; }
 function StatusDot({ status }: { status: RoadMapSection["status"] }) { const colors = { closed: "bg-[#ef8e76]", difficult: "bg-[#d48c6b]", caution: "bg-[#e8c4b0]", normal: "bg-[#4d8f8a]", unknown: "bg-[#74817e]" }; return <span className={`h-3 w-3 shrink-0 rounded-full ${colors[status]}`} />; }
 function roadLabel(section: RoadMapSection) { return section.roadNumbers.length ? section.roadNumbers.join(" · ") : section.name ?? "Official road section"; }
