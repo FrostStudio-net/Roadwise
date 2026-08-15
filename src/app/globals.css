@@ -4,7 +4,18 @@
 :root {
   --app-width: 480px;
   --app-gutter: 18px;
-  --nav-clearance: 138px;
+  --roadwise-bottom-nav-height: 72px;
+  --roadwise-bottom-nav-offset: calc(12px + env(safe-area-inset-bottom, 0px));
+  --roadwise-bottom-clearance: calc(
+    var(--roadwise-bottom-nav-height) +
+    var(--roadwise-bottom-nav-offset) +
+    24px
+  );
+  --roadwise-bottom-sheet-offset: calc(
+    var(--roadwise-bottom-nav-height) +
+    var(--roadwise-bottom-nav-offset) +
+    10px
+  );
   --background: #0a0f0f;
   --surface: rgba(255, 252, 248, 0.055);
   --surface-strong: rgba(23, 34, 34, 0.88);
@@ -24,6 +35,7 @@
 html {
   background: var(--background);
   color-scheme: dark;
+  scroll-padding-bottom: var(--roadwise-bottom-clearance);
 }
 
 body {
@@ -67,7 +79,11 @@ button:focus-visible, a:focus-visible {
 }
 
 .destination-suggestions {
-  max-height: clamp(6rem, calc(100dvh - 12rem - env(safe-area-inset-bottom)), 19rem);
+  max-height: clamp(
+    6rem,
+    calc(100dvh - 12rem - var(--roadwise-bottom-nav-height) - var(--roadwise-bottom-nav-offset)),
+    19rem
+  );
   -webkit-overflow-scrolling: touch;
 }
 
@@ -81,13 +97,15 @@ button:focus-visible, a:focus-visible {
 .page-shell {
   width: 100%;
   max-width: var(--app-width);
+  min-height: 100dvh;
   margin: 0 auto;
-  padding: 24px var(--app-gutter) calc(var(--nav-clearance) + env(safe-area-inset-bottom));
+  padding: 24px var(--app-gutter) var(--roadwise-bottom-clearance);
   overflow-x: clip;
 }
 
 .bottom-nav {
-  bottom: max(14px, env(safe-area-inset-bottom));
+  bottom: var(--roadwise-bottom-nav-offset);
+  min-height: var(--roadwise-bottom-nav-height);
   width: min(
     calc(100% - (var(--app-gutter) * 2)),
     calc(var(--app-width) - (var(--app-gutter) * 2))
