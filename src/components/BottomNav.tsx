@@ -3,11 +3,22 @@
 import { Home, Map, Route, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 
 const items = [{ label: "Home", href: "/", icon: Home }, { label: "Check", href: "/check", icon: Route }, { label: "Roads", href: "/roads", icon: Map }, { label: "Drive", href: "/drive", icon: ShieldAlert }];
+const subscribeToHydration = () => () => undefined;
 
 export default function BottomNav({ hidden = false }: { hidden?: boolean }) {
   const pathname = usePathname();
+  const mounted = useSyncExternalStore(subscribeToHydration, () => true, () => false);
+
+  if (!mounted) return null;
+
+  return createPortal(<BottomNavView pathname={pathname} hidden={hidden} />, document.body);
+}
+
+export function BottomNavView({ pathname, hidden = false }: { pathname: string; hidden?: boolean }) {
   return (
     <nav
       aria-label="Main navigation"

@@ -36,20 +36,18 @@
 * { box-sizing: border-box; }
 
 html {
-  height: 100%;
-  overflow: hidden;
+  min-height: 100%;
+  scroll-padding-bottom: var(--roadwise-bottom-reserve);
   background: var(--background);
   color-scheme: dark;
 }
 
 body {
-  /* The body is Roadwise's single vertical scroll container. */
   width: 100%;
-  height: 100dvh;
+  min-height: 100dvh;
   margin: 0;
   padding-bottom: var(--roadwise-bottom-reserve);
   overflow-x: hidden;
-  overflow-y: auto;
   scroll-padding-bottom: var(--roadwise-bottom-reserve);
   color: var(--text);
   background:
@@ -57,7 +55,6 @@ body {
     radial-gradient(circle at 91% 26%, rgba(212, 140, 107, 0.1), transparent 25rem),
     linear-gradient(155deg, #0a0f0f 0%, #141c1c 48%, #1a2626 100%);
   background-attachment: fixed;
-  -webkit-overflow-scrolling: touch;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
@@ -120,7 +117,6 @@ button:focus-visible, a:focus-visible {
     calc(var(--app-width) - (var(--app-gutter) * 2))
   );
   transition: opacity 180ms ease, transform 220ms ease;
-  will-change: opacity, transform;
 }
 
 .bottom-nav[data-interaction-hidden="true"] {

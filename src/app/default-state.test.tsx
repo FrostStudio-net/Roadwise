@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import HomePage from "@/app/page";
-import BottomNav from "@/components/BottomNav";
+import { BottomNavView } from "@/components/BottomNav";
 import DriveEmptyState from "@/components/DriveEmptyState";
 
 vi.mock("next/navigation", () => ({
@@ -28,7 +28,7 @@ describe("fresh app defaults", () => {
   });
 
   it("makes the hidden navigation inert during input interaction", () => {
-    const markup = renderToStaticMarkup(<BottomNav hidden />);
+    const markup = renderToStaticMarkup(<BottomNavView pathname="/" hidden />);
     expect(markup).toContain('data-interaction-hidden="true"');
     expect(markup).toContain('aria-hidden="true"');
     expect(markup).toContain('inert=""');
