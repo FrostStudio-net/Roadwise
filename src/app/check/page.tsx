@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpRight, CarFront, CloudOff, Map, Navigation } from "lucide-react";
+import { ArrowUpRight, CloudOff, Map, Navigation } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
@@ -10,6 +10,7 @@ import AppHeader from "@/components/AppHeader";
 import ChargingOutlook from "@/components/ChargingOutlook";
 import DataAttribution from "@/components/DataAttribution";
 import RoadStatusIcon from "@/components/RoadStatusIcon";
+import RouteLoadingScene from "@/components/RouteLoadingScene";
 import VehicleSelector from "@/components/VehicleSelector";
 import { readDestinationSelection } from "@/lib/destination-selection-storage";
 import { ROAD_STATUS_STYLES } from "@/lib/road-status-style";
@@ -182,7 +183,7 @@ function AnalysisLoading() {
     const timers = [900, 2_100, 3_400].map((delay, index) => window.setTimeout(() => setStage(index + 1), delay));
     return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, []);
-  return <section className="motion-state-enter glass card section-block flex min-h-52 items-center justify-center p-6 text-center" aria-live="polite" aria-busy="true"><div><div className="route-analysis-loader mx-auto" aria-hidden="true"><span className="route-analysis-line" /><span className="route-analysis-trail" /><span className="route-analysis-car"><CarFront size={22} strokeWidth={1.8} /></span></div><h2 key={LOADING_STAGES[stage]} className="motion-crossfade mt-4 text-[18px] font-semibold">{LOADING_STAGES[stage]}</h2><p className="mt-2 text-[12px] text-[#8e9b98]">Road and weather checks run together</p></div></section>;
+  return <section className="motion-state-enter glass card section-block flex min-h-52 items-center justify-center p-6 text-center" aria-live="polite" aria-busy="true"><div className="w-full"><RouteLoadingScene /><h2 key={LOADING_STAGES[stage]} className="motion-crossfade mt-3 text-[18px] font-semibold">{LOADING_STAGES[stage]}</h2><p className="mt-2 text-[12px] text-[#8e9b98]">Road and weather checks run together</p></div></section>;
 }
 
 function CheckLoading() {

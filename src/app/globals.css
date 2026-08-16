@@ -272,50 +272,95 @@ button:focus-visible, a:focus-visible {
   animation: roadwise-shimmer 2s ease-in-out infinite;
 }
 
-.route-analysis-loader {
+.drive-loading-scene {
   position: relative;
+  width: min(100%, 296px);
+  height: 112px;
+  margin-inline: auto;
+  overflow: hidden;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(45, 107, 107, .04), transparent 72%);
+}
+
+.drive-loading-terrain {
+  position: absolute;
+  inset: 0 0 auto;
+  width: 296px;
+  height: 84px;
+  overflow: hidden;
+}
+
+.drive-loading-ridge {
+  transform-box: view-box;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.drive-loading-ridge-distant { animation: roadwise-terrain-scroll 15s linear infinite; }
+.drive-loading-ridge-near { animation: roadwise-terrain-scroll 7.8s linear infinite; }
+
+.drive-loading-car-anchor {
+  position: absolute;
+  z-index: 3;
+  top: 8px;
+  left: 50%;
   width: 190px;
-  height: 42px;
+  height: 78px;
+  transform: translateX(-50%);
 }
 
-.route-analysis-line,
-.route-analysis-trail {
+.drive-loading-car-anchor svg { display: block; width: 100%; height: 100%; overflow: visible; }
+
+.drive-loading-car-suspension {
+  transform-box: fill-box;
+  transform-origin: 50% 76%;
+  animation: roadwise-car-suspension 540ms var(--ease-roadwise-standard) infinite;
+  will-change: transform;
+}
+
+.drive-loading-tread {
+  animation: roadwise-tire-tread 520ms linear infinite;
+  will-change: stroke-dashoffset;
+}
+
+.drive-loading-road {
   position: absolute;
-  left: 8px;
-  right: 8px;
-  top: 28px;
-  height: 1px;
-  border-radius: 999px;
+  z-index: 2;
+  right: 0;
+  bottom: 4px;
+  left: 0;
+  height: 23px;
+  overflow: hidden;
+  border-block: 1px solid rgba(105, 168, 163, .1);
+  background-color: rgba(8, 15, 15, .92);
+  background-image:
+    radial-gradient(circle at 7px 4px, rgba(232, 196, 176, .14) 0 1px, transparent 1.2px),
+    radial-gradient(circle at 22px 10px, rgba(105, 168, 163, .13) 0 .8px, transparent 1px);
+  background-size: 32px 12px, 48px 18px;
+  animation: roadwise-road-scroll 1.15s linear infinite;
+  will-change: background-position;
 }
 
-.route-analysis-line {
-  background: linear-gradient(90deg, rgba(105, 168, 163, .08), rgba(105, 168, 163, .34), rgba(105, 168, 163, .08));
-}
-
-.route-analysis-trail {
-  right: auto;
-  width: 78px;
-  transform-origin: left center;
-  background: linear-gradient(90deg, transparent, rgba(212, 140, 107, .48));
-  animation: roadwise-route-trail 2.6s var(--ease-roadwise-standard) infinite;
-}
-
-.route-analysis-car {
+.drive-loading-road::after {
   position: absolute;
-  left: 4px;
-  top: 6px;
-  display: flex;
-  width: 32px;
-  height: 32px;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(105, 168, 163, .18);
-  border-radius: 12px;
-  color: #b9d4d0;
-  background: #152323;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, .28);
-  animation: roadwise-route-car 2.6s var(--ease-roadwise-standard) infinite;
-  will-change: transform, opacity;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255,255,255,.025), transparent 45%, rgba(0,0,0,.2));
+}
+
+.drive-loading-road-line {
+  position: absolute;
+  z-index: 1;
+  top: 7px;
+  right: 0;
+  left: 0;
+  height: 2px;
+  opacity: .48;
+  background-image: repeating-linear-gradient(90deg, transparent 0 18px, rgba(212, 140, 107, .62) 18px 52px, transparent 52px 96px);
+  background-size: 96px 2px;
+  animation: roadwise-road-line-scroll 1.15s linear infinite;
+  will-change: background-position;
 }
 
 .emergency-accordion > .accordion-content {
@@ -556,17 +601,24 @@ button:focus-visible, a:focus-visible {
   0%, 25% { transform: translateX(-100%); }
   75%, 100% { transform: translateX(100%); }
 }
-@keyframes roadwise-route-car {
-  0% { opacity: 0; transform: translateX(0); }
-  10% { opacity: 1; }
-  82% { opacity: 1; transform: translateX(150px); }
-  100% { opacity: 0; transform: translateX(150px); }
+@keyframes roadwise-car-suspension {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  18% { transform: translateY(-1.15px) rotate(.16deg); }
+  43% { transform: translateY(.65px) rotate(-.12deg); }
+  68% { transform: translateY(-1.45px) rotate(.1deg); }
+  86% { transform: translateY(.35px) rotate(-.06deg); }
 }
-@keyframes roadwise-route-trail {
-  0% { opacity: 0; transform: scaleX(.15); }
-  16% { opacity: .65; }
-  72% { opacity: .55; transform: translateX(82px) scaleX(1); }
-  100% { opacity: 0; transform: translateX(82px) scaleX(.65); }
+@keyframes roadwise-tire-tread {
+  to { stroke-dashoffset: -8; }
+}
+@keyframes roadwise-road-scroll {
+  to { background-position: -96px 0, -96px 0; }
+}
+@keyframes roadwise-road-line-scroll {
+  to { background-position: -96px 0; }
+}
+@keyframes roadwise-terrain-scroll {
+  to { transform: translate3d(-296px, 0, 0); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -580,8 +632,11 @@ button:focus-visible, a:focus-visible {
   .motion-sheet-centered,
   .motion-fullscreen { transform: none !important; }
   .motion-sheet-centered { transform: translateX(-50%) !important; }
-  .route-analysis-car { opacity: 1 !important; transform: translateX(75px) !important; }
-  .route-analysis-trail { opacity: .45 !important; transform: translateX(40px) scaleX(.7) !important; }
+  .drive-loading-car-suspension,
+  .drive-loading-tread,
+  .drive-loading-road,
+  .drive-loading-road-line,
+  .drive-loading-ridge { animation: none !important; }
 }
 
 @media (min-width: 520px) {
