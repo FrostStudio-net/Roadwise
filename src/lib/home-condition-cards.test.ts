@@ -42,9 +42,16 @@ const route: AnalyseRouteResponse = {
 
 describe("Home condition-card precedence", () => {
   it("uses a successful stored route before nearby summaries", () => {
-    const cards = resolveHomeConditionCards({ route, nearby, locationStatus: "available", nearbyLoading: false });
+    const cards = resolveHomeConditionCards({ route, routeContext: "checked", nearby, locationStatus: "available", nearbyLoading: false });
     expect(cards.roads).toMatchObject({ value: "Road closed", note: "On your route", tone: "closed" });
     expect(cards.advisories).toMatchObject({ value: "1 reported", note: "On your route", tone: "closed" });
+  });
+
+  it("labels an active trip distinctly from a merely checked route", () => {
+    const cards = resolveHomeConditionCards({ route, routeContext: "active", nearby, locationStatus: "available", nearbyLoading: false });
+    expect(cards.wind.note).toBe("On active route");
+    expect(cards.roads.note).toBe("On active route");
+    expect(cards.advisories.note).toBe("On active route");
   });
 
   it("returns to nearby summaries when the active route is cleared", () => {

@@ -13,7 +13,7 @@ import RoadStatusIcon from "@/components/RoadStatusIcon";
 import VehicleSelector from "@/components/VehicleSelector";
 import { readDestinationSelection } from "@/lib/destination-selection-storage";
 import { ROAD_STATUS_STYLES } from "@/lib/road-status-style";
-import { clearRouteAnalysis, storeRouteAnalysis } from "@/lib/route-analysis-storage";
+import { promoteCheckedRouteToActiveTrip, storeCheckedRoute } from "@/lib/route-analysis-storage";
 import { VEHICLE_TYPES } from "@/types/analysis";
 import type { AnalyseRouteResponse, AnalysisDebugRecord, RouteWarning, VehicleType } from "@/types/analysis";
 
@@ -76,17 +76,17 @@ function CheckContent() {
   const [result, setResult] = useState<AnalyseRouteResponse>();
   const [loading, setLoading] = useState(Boolean(destination));
   const [requestError, setRequestError] = useState<string>();
+  const [driveStartError, setDriveStartError] = useState<string>();
 
   useEffect(() => {
     if (!destination) return;
     let active = true;
-    clearRouteAnalysis();
     requestAnalysis({ origin: "Reykjavík", destination, vehicle, destinationSelection: readDestinationSelection(destinationId) })
       .then((data) => {
         if (!active) return;
         setResult(data);
         setRequestError(undefined);
-        storeRouteAnalysis(data);
+        storeCheckedRoute(data);
       })
       .catch((error: unknown) => {
         if (!active) return;
@@ -103,6 +103,15 @@ function CheckContent() {
   const analysis = result?.analysis;
   const roadDataUnavailable = analysis && !analysis.available;
   const verdictStyle = analysis ? ROAD_STATUS_STYLES[analysis.level] : undefined;
+
+  function startDrive() {
+    if (!result || !promoteCheckedRouteToActiveTrip(result)) {
+      setDriveStartError("This checked route is no longer current. Run Drive Check again before starting.");
+      return;
+    }
+    setDriveStartError(undefined);
+    router.push("/drive");
+  }
 
   return (
     <>
@@ -152,7 +161,7 @@ function CheckContent() {
           </>
         )}
 
-        {route && <div className="action-stack">{analysis?.available ? <button onClick={() => router.push("/drive")} className="primary-button">Open drive mode <ArrowUpRight size={19} /></button> : null}<button onClick={() => openMaps(route.origin.name, route.destination.name)} className="glass flex w-full items-center justify-center gap-2 rounded-[22px] px-5 py-[15px] text-[13px] text-[#c2cac7]"><Navigation size={16} className="text-[#d48c6b]" />Open in Maps</button></div>}
+        {route && <div className="action-stack">{analysis?.available ? <button onClick={startDrive} className="primary-button">Start Drive <ArrowUpRight size={19} /></button> : null}{driveStartError ? <p role="status" className="px-2 text-center text-[10px] leading-4 text-[#d9a68d]">{driveStartError}</p> : null}<button onClick={() => openMaps(route.origin.name, route.destination.name)} className="glass flex w-full items-center justify-center gap-2 rounded-[22px] px-5 py-[15px] text-[13px] text-[#c2cac7]"><Navigation size={16} className="text-[#d48c6b]" />Open in Maps</button></div>}
         <div className="section-block"><VehicleSelector vehicle={vehicle} onChange={(value) => { setLoading(true); setRequestError(undefined); setVehicle(value); }} /></div>
         <DataAttribution includeImo />
       </main><BottomNav />

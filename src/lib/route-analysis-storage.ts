@@ -1,76 +1,124 @@
 import { VEHICLE_TYPES } from "@/types/analysis";
 import type { AnalyseRouteResponse, GeocodedPlace, VehicleType } from "@/types/analysis";
 
-export const ROUTE_ANALYSIS_STORAGE_KEY = "roadwise:last-route-analysis";
-export const ROUTE_ANALYSIS_STORAGE_VERSION = 1;
-export const ROUTE_ANALYSIS_TTL_MS = 6 * 60 * 60 * 1_000;
+export const CHECKED_ROUTE_STORAGE_KEY = "roadwise:checked-route-analysis:v2";
+export const ACTIVE_TRIP_STORAGE_KEY = "roadwise:active-trip:v1";
+export const LEGACY_ROUTE_ANALYSIS_STORAGE_KEY = "roadwise:last-route-analysis";
+export const ROUTE_STATE_STORAGE_VERSION = 2;
+export const CHECKED_ROUTE_TTL_MS = 6 * 60 * 60 * 1_000;
+export const ACTIVE_TRIP_TTL_MS = 12 * 60 * 60 * 1_000;
 
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
-type StoredRouteAnalysis = {
-  version: typeof ROUTE_ANALYSIS_STORAGE_VERSION;
+type StoredRouteState = {
+  version: typeof ROUTE_STATE_STORAGE_VERSION;
   storedAt: number;
   analysis: AnalyseRouteResponse;
 };
 
-export function storeRouteAnalysis(analysis: AnalyseRouteResponse, now = Date.now(), storage = browserSessionStorage()): void {
-  if (!storage) return;
-  if (!isValidRouteAnalysis(analysis)) {
-    try {
-      storage.removeItem(ROUTE_ANALYSIS_STORAGE_KEY);
-    } catch {
-      // Drive Mode will still reject the invalid value when it is read.
-    }
-    return;
-  }
+export function storeCheckedRoute(analysis: AnalyseRouteResponse, now = Date.now(), storage = browserSessionStorage()): boolean {
+  return storeRouteState(CHECKED_ROUTE_STORAGE_KEY, analysis, now, storage);
+}
+
+export function readCheckedRoute(now = Date.now(), storage = browserSessionStorage()): AnalyseRouteResponse | undefined {
+  return readRouteState(CHECKED_ROUTE_STORAGE_KEY, CHECKED_ROUTE_TTL_MS, now, storage);
+}
+
+export function clearCheckedRoute(storage = browserSessionStorage()): void {
+  removeStorageKey(CHECKED_ROUTE_STORAGE_KEY, storage);
+}
+
+export function readActiveTrip(now = Date.now(), storage = browserSessionStorage()): AnalyseRouteResponse | undefined {
+  return readRouteState(ACTIVE_TRIP_STORAGE_KEY, ACTIVE_TRIP_TTL_MS, now, storage);
+}
+
+export function clearActiveTrip(storage = browserSessionStorage()): void {
+  removeStorageKey(ACTIVE_TRIP_STORAGE_KEY, storage);
+}
+
+export function promoteCheckedRouteToActiveTrip(expected: AnalyseRouteResponse, now = Date.now(), storage = browserSessionStorage()): AnalyseRouteResponse | undefined {
+  const checked = readCheckedRoute(now, storage);
+  if (!checked || !sameCheckedRoute(checked, expected)) return undefined;
+  return storeRouteState(ACTIVE_TRIP_STORAGE_KEY, checked, now, storage) ? checked : undefined;
+}
+
+export function parseStoredRouteState(value: string | null | undefined, ttlMs: number, now = Date.now()): AnalyseRouteResponse | undefined {
+  if (!value) return undefined;
   try {
-    const compact: AnalyseRouteResponse = {
-      ...analysis,
-      analysis: {
-        ...analysis.analysis,
-        warnings: analysis.analysis.warnings.map((warning) => ({ ...warning, matchedGeometry: undefined })),
-      },
-      debug: undefined,
-    };
-    const value: StoredRouteAnalysis = { version: ROUTE_ANALYSIS_STORAGE_VERSION, storedAt: now, analysis: compact };
-    storage.setItem(ROUTE_ANALYSIS_STORAGE_KEY, JSON.stringify(value));
+    const stored = JSON.parse(value) as Partial<StoredRouteState>;
+    if (stored.version !== ROUTE_STATE_STORAGE_VERSION
+      || !Number.isFinite(stored.storedAt)
+      || (stored.storedAt as number) > now + 5 * 60_000
+      || now - (stored.storedAt as number) > ttlMs
+      || !isValidRouteAnalysis(stored.analysis)) return undefined;
+    return stored.analysis;
   } catch {
-    // Drive Mode can still render its empty state when storage is disabled.
+    return undefined;
   }
 }
 
-export function readRouteAnalysis(now = Date.now(), storage = browserSessionStorage()): AnalyseRouteResponse | undefined {
+function storeRouteState(key: string, analysis: AnalyseRouteResponse, now: number, storage: StorageLike | undefined): boolean {
+  if (!storage) return false;
+  removeLegacyStorage(storage);
+  if (!isValidRouteAnalysis(analysis)) return false;
+  try {
+    const value: StoredRouteState = { version: ROUTE_STATE_STORAGE_VERSION, storedAt: now, analysis: compactAnalysis(analysis) };
+    storage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function readRouteState(key: string, ttlMs: number, now: number, storage: StorageLike | undefined): AnalyseRouteResponse | undefined {
   if (!storage) return undefined;
   try {
-    const value = storage.getItem(ROUTE_ANALYSIS_STORAGE_KEY);
-    const analysis = parseStoredRouteAnalysis(value, now);
-    if (value && !analysis) storage.removeItem(ROUTE_ANALYSIS_STORAGE_KEY);
+    removeLegacyStorage(storage);
+    const value = storage.getItem(key);
+    const analysis = parseStoredRouteState(value, ttlMs, now);
+    if (value && !analysis) storage.removeItem(key);
     return analysis;
   } catch {
     return undefined;
   }
 }
 
-export function clearRouteAnalysis(storage = browserSessionStorage()): void {
+function compactAnalysis(analysis: AnalyseRouteResponse): AnalyseRouteResponse {
+  return {
+    ...analysis,
+    analysis: {
+      ...analysis.analysis,
+      warnings: analysis.analysis.warnings.map((warning) => ({ ...warning, matchedGeometry: undefined })),
+    },
+    debug: undefined,
+  };
+}
+
+function sameCheckedRoute(left: AnalyseRouteResponse, right: AnalyseRouteResponse): boolean {
+  return left.vehicle === right.vehicle
+    && left.route.destination.name === right.route.destination.name
+    && coordinatesEqual(left.route.origin.coordinates, right.route.origin.coordinates)
+    && coordinatesEqual(left.route.destination.coordinates, right.route.destination.coordinates)
+    && Math.abs(left.route.distanceKm - right.route.distanceKm) < 0.01;
+}
+
+function coordinatesEqual(left: [number, number], right: [number, number]): boolean {
+  return Math.abs(left[0] - right[0]) < 0.000001 && Math.abs(left[1] - right[1]) < 0.000001;
+}
+
+function removeLegacyStorage(storage: StorageLike): void {
   try {
-    storage?.removeItem(ROUTE_ANALYSIS_STORAGE_KEY);
+    storage.removeItem(LEGACY_ROUTE_ANALYSIS_STORAGE_KEY);
   } catch {
-    // No action required.
+    // The explicit v2 keys remain authoritative when storage is restricted.
   }
 }
 
-export function parseStoredRouteAnalysis(value: string | null | undefined, now = Date.now()): AnalyseRouteResponse | undefined {
-  if (!value) return undefined;
+function removeStorageKey(key: string, storage: StorageLike | undefined): void {
   try {
-    const stored = JSON.parse(value) as Partial<StoredRouteAnalysis>;
-    if (stored.version !== ROUTE_ANALYSIS_STORAGE_VERSION
-      || !Number.isFinite(stored.storedAt)
-      || (stored.storedAt as number) > now + 5 * 60_000
-      || now - (stored.storedAt as number) > ROUTE_ANALYSIS_TTL_MS
-      || !isValidRouteAnalysis(stored.analysis)) return undefined;
-    return stored.analysis;
+    storage?.removeItem(key);
   } catch {
-    return undefined;
+    // Readers still reject invalid or inaccessible route state.
   }
 }
 
@@ -99,7 +147,7 @@ function validGeometry(value: unknown): boolean {
     && value.coordinates.every(validCoordinate);
 }
 
-function validCoordinate(value: unknown): boolean {
+function validCoordinate(value: unknown): value is [number, number] {
   return Array.isArray(value)
     && value.length === 2
     && typeof value[0] === "number"

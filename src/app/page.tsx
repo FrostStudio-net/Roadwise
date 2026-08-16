@@ -1,6 +1,6 @@
 "use client";
 
-import { Crosshair, Fuel, Map, MountainSnow, Navigation, ShieldAlert, Wind } from "lucide-react";
+import { Crosshair, Fuel, Map, MountainSnow, Navigation, Route, ShieldAlert, Wind, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -12,7 +12,7 @@ import VehicleSelector from "@/components/VehicleSelector";
 import { useCurrentLocation } from "@/hooks/use-current-location";
 import { clearDestinationSelection, storeDestinationSelection } from "@/lib/destination-selection-storage";
 import { resolveHomeConditionCards } from "@/lib/home-condition-cards";
-import { readRouteAnalysis } from "@/lib/route-analysis-storage";
+import { clearCheckedRoute, readActiveTrip, readCheckedRoute } from "@/lib/route-analysis-storage";
 import type { AnalyseRouteResponse, GeocodedPlace, VehicleType } from "@/types/analysis";
 import type { NearbyConditionsResponse } from "@/types/nearby";
 
@@ -24,34 +24,40 @@ export default function HomePage() {
   const [checking, setChecking] = useState(false);
   const [navigationError, setNavigationError] = useState<string>();
   const [destinationInteractionActive, setDestinationInteractionActive] = useState(false);
-  const [routeState, setRouteState] = useState<{ restored: boolean; analysis?: AnalyseRouteResponse }>({ restored: false });
+  const [routeState, setRouteState] = useState<{ restored: boolean; checked?: AnalyseRouteResponse; active?: AnalyseRouteResponse }>({ restored: false });
   const [nearby, setNearby] = useState<NearbyConditionsResponse>();
   const [nearbyLoading, setNearbyLoading] = useState(false);
   const [nearbyError, setNearbyError] = useState(false);
   const navigationPending = useRef(false);
-  const currentLocation = useCurrentLocation(routeState.restored && !routeState.analysis);
+  const routeContext = routeState.active ?? routeState.checked;
+  const currentLocation = useCurrentLocation(routeState.restored && !routeContext);
 
   useEffect(() => {
     let active = true;
     function restoreRoute() {
-      const analysis = readRouteAnalysis();
+      const checked = readCheckedRoute();
+      const activeTrip = readActiveTrip();
       if (!active) return;
-      setRouteState({ restored: true, analysis });
-      if (analysis) setVehicle(analysis.vehicle);
+      setRouteState({ restored: true, checked, active: activeTrip });
+      if (activeTrip ?? checked) setVehicle((activeTrip ?? checked)!.vehicle);
     }
     queueMicrotask(restoreRoute);
     function restoreWhenVisible() {
       if (document.visibilityState === "visible") restoreRoute();
     }
     document.addEventListener("visibilitychange", restoreWhenVisible);
+    window.addEventListener("focus", restoreRoute);
+    window.addEventListener("pageshow", restoreRoute);
     return () => {
       active = false;
       document.removeEventListener("visibilitychange", restoreWhenVisible);
+      window.removeEventListener("focus", restoreRoute);
+      window.removeEventListener("pageshow", restoreRoute);
     };
   }, []);
 
   useEffect(() => {
-    if (routeState.analysis || currentLocation.status !== "available" || !currentLocation.location) return;
+    if (routeContext || currentLocation.status !== "available" || !currentLocation.location) return;
     const controller = new AbortController();
     queueMicrotask(() => {
       if (!controller.signal.aborted) {
@@ -82,20 +88,26 @@ export default function HomePage() {
       if (!controller.signal.aborted) setNearbyLoading(false);
     });
     return () => controller.abort();
-  }, [currentLocation.location, currentLocation.status, routeState.analysis, vehicle]);
+  }, [currentLocation.location, currentLocation.status, routeContext, vehicle]);
 
   const conditionCards = useMemo(() => resolveHomeConditionCards({
-    route: routeState.analysis,
+    route: routeContext,
+    routeContext: routeState.active ? "active" : routeState.checked ? "checked" : undefined,
     nearby,
     locationStatus: currentLocation.status,
     nearbyLoading: nearbyLoading || !routeState.restored,
     nearbyUnavailable: nearbyError,
-  }), [currentLocation.status, nearby, nearbyError, nearbyLoading, routeState.analysis, routeState.restored]);
-  const conditionStateKey = routeState.analysis
-    ? `route-${routeState.analysis.route.destination.name}-${routeState.analysis.analysis.level}`
+  }), [currentLocation.status, nearby, nearbyError, nearbyLoading, routeContext, routeState.active, routeState.checked, routeState.restored]);
+  const conditionStateKey = routeContext
+    ? `${routeState.active ? "active" : "checked"}-${routeContext.route.destination.name}-${routeContext.analysis.level}`
     : nearby
       ? `nearby-${nearby.generatedAt}`
       : `${currentLocation.status}-${nearbyLoading}-${nearbyError}`;
+
+  function clearRouteContext() {
+    clearCheckedRoute();
+    setRouteState((current) => ({ ...current, checked: undefined }));
+  }
 
   function navigateToCheck(place?: GeocodedPlace) {
     if (navigationPending.current) return;
@@ -154,9 +166,11 @@ export default function HomePage() {
           <ConditionCard icon={<ShieldAlert size={18} strokeWidth={1.6} />} label="Advisories" {...conditionCards.advisories} />
         </section>
 
-        {!routeState.analysis ? <HomeLocationPrompt status={currentLocation.status} accuracyMeters={currentLocation.location?.accuracyMeters} onUseLocation={currentLocation.request} onDismiss={currentLocation.dismiss} onRefresh={currentLocation.request} /> : null}
+        {routeContext ? <RouteContextBanner destination={routeContext.route.destination.name} active={Boolean(routeState.active)} onClear={clearRouteContext} /> : null}
 
-        <section className="section-block-lg">
+        {!routeContext ? <HomeLocationPrompt status={currentLocation.status} accuracyMeters={currentLocation.location?.accuracyMeters} onUseLocation={currentLocation.request} onDismiss={currentLocation.dismiss} onRefresh={currentLocation.request} /> : null}
+
+        <section id="destination-search" className="section-block-lg scroll-mt-6">
           <div className="mb-3 flex items-end justify-between"><div><div className="eyebrow">Plan ahead</div><h2 className="mt-1 text-lg font-semibold tracking-[-0.025em]">Where to?</h2></div><span className="text-[10px] text-[#7f8c89]">From Reykjavík</span></div>
           <DestinationAutocomplete value={destination} onValueChange={(value) => { setDestination(value); setSelectedDestination(undefined); setNavigationError(undefined); clearDestinationSelection(); }} onSelect={(place) => { setDestinationInteractionActive(false); setDestination(place.name); setSelectedDestination(place); storeDestinationSelection(place); navigateToCheck(place); }} onSubmit={checkDrive} disabled={checking} error={navigationError} onInteractionChange={setDestinationInteractionActive} />
           <button onClick={() => router.push(`/just-drive?vehicle=${encodeURIComponent(vehicle)}`)} className="motion-press glass mt-2 flex w-full items-center gap-3 rounded-[22px] px-4 py-3.5 text-left hover:bg-white/[.045]">
@@ -181,6 +195,10 @@ export default function HomePage() {
       <BottomNav hidden={destinationInteractionActive} />
     </>
   );
+}
+
+function RouteContextBanner({ destination, active, onClear }: { destination: string; active: boolean; onClear: () => void }) {
+  return <section className="motion-state-enter mt-3 flex min-h-12 items-center gap-3 rounded-[18px] border border-[#69a8a3]/15 bg-[#2d6b6b]/[.08] px-3.5 py-2.5" aria-label={active ? `Active route to ${destination}` : `Showing checked route to ${destination}`}><Route size={16} className="shrink-0 text-[#69a8a3]" /><div className="min-w-0 flex-1"><div className="text-[9px] uppercase tracking-[.11em] text-[#718f8b]">{active ? "On your active route" : "Showing checked route"}</div><div className="mt-0.5 truncate text-[11px] font-semibold text-[#c4d0cd]">To {destination}</div></div>{active ? <Link href="/drive" className="motion-press min-h-10 shrink-0 rounded-[14px] px-3 py-3 text-[10px] font-semibold text-[#8fbab5]">Open</Link> : <button type="button" onClick={onClear} className="motion-press flex min-h-10 shrink-0 items-center gap-1.5 rounded-[14px] px-3 text-[10px] font-semibold text-[#9ca7a4]">Clear <X size={13} /></button>}</section>;
 }
 
 function HomeLocationPrompt({ status, accuracyMeters, onUseLocation, onDismiss, onRefresh }: {

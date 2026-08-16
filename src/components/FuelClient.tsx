@@ -12,7 +12,7 @@ import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { useMotionPresence } from "@/hooks/use-motion-presence";
 import { developmentMapError, initialMapDiagnostics, mapCanvasSize, mapContainerHasSize, observeMapSize, publicMapboxToken, ROADWISE_MAP_STYLE, sanitizeMapError } from "@/lib/client-map";
 import { detectLongServiceGaps, filterServicePois, FUEL_SERVICE_CONFIG, matchServicePoisToRoute, nearestServicePois, routeProgressAt } from "@/lib/fuel-services";
-import { readRouteAnalysis } from "@/lib/route-analysis-storage";
+import { readCheckedRoute } from "@/lib/route-analysis-storage";
 import type { VehicleType } from "@/types/analysis";
 import type { Coordinates, GeoJsonLineString } from "@/types/road";
 import type { RouteServicePoi, ServicePoi, ServicePoiSnapshot, ServicePoiType, StoredServiceRoute } from "@/types/service-poi";
@@ -40,7 +40,7 @@ export default function FuelClient({ initialSnapshot, initialVehicle, initialMod
   const [mapDiagnostics, setMapDiagnostics] = useState(() => initialMapDiagnostics(mapConfigured));
 
   useEffect(() => {
-    const analysis = readRouteAnalysis();
+    const analysis = readCheckedRoute();
     if (!analysis) return;
     let active = true;
     queueMicrotask(() => {

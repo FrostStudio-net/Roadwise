@@ -5,7 +5,7 @@ import type { NearbyConditionsResponse } from "@/types/nearby";
 
 export type HomeConditionCard = {
   value: string;
-  note: "Nearby" | "On your route";
+  note: "Nearby" | "On your route" | "On active route";
   tone: ConditionTone;
 };
 
@@ -17,35 +17,37 @@ export type HomeConditionCards = {
 
 export function resolveHomeConditionCards(input: {
   route?: AnalyseRouteResponse;
+  routeContext?: "checked" | "active";
   nearby?: NearbyConditionsResponse;
   locationStatus: CurrentLocationStatus;
   nearbyLoading: boolean;
   nearbyUnavailable?: boolean;
 }): HomeConditionCards {
-  if (input.route) return routeConditionCards(input.route);
+  if (input.route) return routeConditionCards(input.route, input.routeContext === "active");
   if (input.nearby) return nearbyConditionCards(input.nearby);
   if (input.nearbyUnavailable) return unavailableConditionCards();
   return inactiveConditionCards(input.locationStatus, input.nearbyLoading);
 }
 
-export function routeConditionCards(route: AnalyseRouteResponse): HomeConditionCards {
+export function routeConditionCards(route: AnalyseRouteResponse, active = false): HomeConditionCards {
+  const note = active ? "On active route" : "On your route";
   const windWarning = route.analysis.warnings.find((warning) => warning.type === "strongWinds");
   const advisories = route.analysis.warnings.filter((warning) => warning.id.startsWith("incident-") || warning.id.startsWith("imo-"));
   const advisorySourcesAvailable = route.sources.irca.incidents && route.sources.imo.available;
   return {
     wind: windWarning
-      ? { value: windWarning.severity === "difficult" || windWarning.severity === "closed" ? "Strong wind" : "Elevated wind", note: "On your route", tone: severityTone(windWarning.severity) }
+      ? { value: windWarning.severity === "difficult" || windWarning.severity === "closed" ? "Strong wind" : "Elevated wind", note, tone: severityTone(windWarning.severity) }
       : route.sources.irca.measurements && route.matches.roadsideStations > 0
-        ? { value: "No wind warning", note: "On your route", tone: "good" }
-        : { value: route.sources.irca.measurements ? "No route reading" : "Unavailable", note: "On your route", tone: "neutral" },
+        ? { value: "No wind warning", note, tone: "good" }
+        : { value: route.sources.irca.measurements ? "No route reading" : "Unavailable", note, tone: "neutral" },
     roads: {
       value: routeStatusLabel(route.analysis.level),
-      note: "On your route",
+      note,
       tone: riskTone(route.analysis.level),
     },
     advisories: advisories.length > 0
-      ? { value: `${advisories.length} reported`, note: "On your route", tone: severityTone(highestSeverity(advisories.map((warning) => warning.severity))) }
-      : { value: advisorySourcesAvailable ? "None reported" : "Unavailable", note: "On your route", tone: advisorySourcesAvailable ? "good" : "neutral" },
+      ? { value: `${advisories.length} reported`, note, tone: severityTone(highestSeverity(advisories.map((warning) => warning.severity))) }
+      : { value: advisorySourcesAvailable ? "None reported" : "Unavailable", note, tone: advisorySourcesAvailable ? "good" : "neutral" },
   };
 }
 
