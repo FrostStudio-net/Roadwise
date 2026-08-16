@@ -103,6 +103,8 @@ button:focus-visible, a:focus-visible {
     calc(100dvh - 12rem - var(--roadwise-bottom-reserve)),
     19rem
   );
+  overscroll-behavior: contain;
+  touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -222,7 +224,15 @@ button:focus-visible, a:focus-visible {
 
 .autocomplete-panel {
   transform-origin: top center;
-  transition: opacity var(--motion-fast) var(--ease-roadwise-standard), transform var(--motion-fast) var(--ease-roadwise-standard), visibility 0s linear 0s;
+  border: 1px solid rgba(105, 168, 163, 0.22);
+  background: linear-gradient(180deg, rgba(15, 26, 26, 0.99), rgba(11, 20, 20, 0.99));
+  box-shadow: 0 24px 68px rgba(0, 0, 0, 0.62), inset 0 1px 0 rgba(255, 255, 255, 0.055);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  transition: opacity var(--motion-fast) var(--ease-roadwise-in), transform var(--motion-fast) var(--ease-roadwise-in), visibility 0s linear 0s;
+}
+.autocomplete-panel[data-state="open"] {
+  animation: roadwise-autocomplete-in 180ms var(--ease-roadwise-out) both;
 }
 .autocomplete-panel[data-state="closed"] {
   opacity: 0;
@@ -426,6 +436,10 @@ button:focus-visible, a:focus-visible {
 }
 @keyframes roadwise-state-enter {
   from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes roadwise-autocomplete-in {
+  from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }
 }
 @keyframes roadwise-value-change {
