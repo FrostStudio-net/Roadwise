@@ -251,6 +251,35 @@ button:focus-visible, a:focus-visible {
 .motion-fullscreen { animation: roadwise-state-enter var(--motion-normal) var(--ease-roadwise-out) both; }
 .motion-fullscreen[data-state="closed"] { animation: roadwise-backdrop-out var(--motion-fast) var(--ease-roadwise-in) both; pointer-events: none; }
 
+.roadwise-dialog-layer[data-state="closed"] { pointer-events: none; }
+.roadwise-dialog-backdrop {
+  animation: roadwise-backdrop-in 180ms var(--ease-roadwise-out) both;
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
+}
+.roadwise-dialog-layer[data-state="closed"] .roadwise-dialog-backdrop {
+  animation: roadwise-backdrop-out 170ms var(--ease-roadwise-in) both;
+}
+.roadwise-dialog-panel {
+  inset-inline: 0;
+  bottom: 0;
+  width: 100%;
+  max-height: min(82dvh, calc(100dvh - env(safe-area-inset-top, 0px) - 12px));
+  border-radius: 30px 30px 0 0;
+  animation: roadwise-dialog-sheet-in 230ms var(--ease-roadwise-out) both;
+}
+.roadwise-dialog-panel[data-state="closed"] {
+  animation: roadwise-dialog-sheet-out 180ms var(--ease-roadwise-in) both;
+}
+.roadwise-dialog-body { -webkit-overflow-scrolling: touch; }
+.roadwise-dialog-panel[data-variant="fullscreen"] {
+  top: 0;
+  max-height: 100dvh;
+  height: 100dvh;
+  border-radius: 0;
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
 .verdict-card-motion,
 .verdict-card-motion .topo-lines,
 .verdict-card-motion h2,
@@ -597,6 +626,22 @@ button:focus-visible, a:focus-visible {
   from { opacity: 1; transform: translate(-50%, 0); }
   to { opacity: 0; transform: translate(-50%, 12px); }
 }
+@keyframes roadwise-dialog-sheet-in {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes roadwise-dialog-sheet-out {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(16px); }
+}
+@keyframes roadwise-dialog-desktop-in {
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 8px)) scale(.985); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes roadwise-dialog-desktop-out {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to { opacity: 0; transform: translate(-50%, calc(-50% + 5px)) scale(.99); }
+}
 @keyframes roadwise-shimmer {
   0%, 25% { transform: translateX(-100%); }
   75%, 100% { transform: translateX(100%); }
@@ -630,13 +675,40 @@ button:focus-visible, a:focus-visible {
   .motion-popover,
   .motion-sheet,
   .motion-sheet-centered,
-  .motion-fullscreen { transform: none !important; }
+  .motion-fullscreen,
+  .roadwise-dialog-panel { transform: none !important; }
   .motion-sheet-centered { transform: translateX(-50%) !important; }
   .drive-loading-car-suspension,
   .drive-loading-tread,
   .drive-loading-road,
   .drive-loading-road-line,
   .drive-loading-ridge { animation: none !important; }
+}
+
+@media (min-width: 640px) {
+  .roadwise-dialog-panel {
+    inset: auto;
+    top: 50%;
+    left: 50%;
+    bottom: auto;
+    width: min(calc(100vw - 32px), 540px);
+    max-height: min(84dvh, 720px);
+    border-radius: 30px;
+    animation-name: roadwise-dialog-desktop-in;
+  }
+  .roadwise-dialog-panel[data-state="closed"] { animation-name: roadwise-dialog-desktop-out; }
+  .roadwise-dialog-panel[data-variant="fullscreen"] {
+    top: 50%;
+    width: min(calc(100vw - 32px), 560px);
+    height: min(88dvh, 820px);
+    max-height: min(88dvh, 820px);
+    border-radius: 30px;
+    padding-top: 0;
+  }
+}
+
+@media (min-width: 640px) and (prefers-reduced-motion: reduce) {
+  .roadwise-dialog-panel { transform: translate(-50%, -50%) !important; }
 }
 
 @media (min-width: 520px) {

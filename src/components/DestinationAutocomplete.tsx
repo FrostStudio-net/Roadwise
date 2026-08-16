@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpRight, Building2, LoaderCircle, MapPin, Mountain, Navigation } from "lucide-react";
+import { ArrowUpRight, Building2, LoaderCircle, MapPin, Mountain } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import type { DestinationSuggestion, GeocodedPlace } from "@/types/analysis";
@@ -124,7 +124,7 @@ export default function DestinationAutocomplete({ value, onValueChange, onSelect
   return (
     <div className="relative z-[70]">
       <div className="roadwise-focus-shell glass card flex items-center gap-3 p-2.5 pl-4 transition-[border-color,background-color,box-shadow] duration-200">
-        <Navigation size={18} strokeWidth={1.6} className="text-[#d48c6b]" />
+        <MapPin size={18} strokeWidth={1.6} className="text-[#d48c6b]" />
         <input
           ref={inputRef}
           aria-label="Destination"
