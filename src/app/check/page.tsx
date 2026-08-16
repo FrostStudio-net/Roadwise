@@ -109,32 +109,32 @@ function CheckContent() {
         </section>
 
         {!destination ? (
-          <section className="glass card section-block p-6">
+          <section className="motion-state-enter glass card section-block p-6">
             <Navigation size={27} className="text-[#69a8a3]" /><h2 className="mt-4 text-[21px] font-semibold">No destination selected</h2><p className="mt-3 text-[13px] leading-6 text-[#a5afac]">Choose a destination on Home before checking a drive.</p><button type="button" onClick={() => router.push("/")} className="primary-button mt-5">Check a drive <ArrowUpRight size={18} /></button>
           </section>
         ) : loading ? (
           <AnalysisLoading />
         ) : requestError || !analysis ? (
-          <section className="glass card section-block p-6">
+          <section className="motion-state-enter glass card section-block p-6">
             <CloudOff size={27} className="text-[#d48c6b]" /><h2 className="mt-4 text-[21px] font-semibold text-[#e8c4b0]">Route check unavailable</h2><p className="mt-3 text-[13px] leading-6 text-[#a5afac]">{requestError ?? "Route analysis is currently unavailable. Please try again."}</p>
           </section>
         ) : roadDataUnavailable ? (
-          <section className="glass card section-block p-6">
+          <section className="motion-state-enter glass card section-block p-6">
             <CloudOff size={27} className="text-[#d48c6b]" /><h2 className="mt-4 text-[21px] font-semibold text-[#e8c4b0]">Live data unavailable</h2><p className="mt-3 text-[13px] leading-6 text-[#a5afac]">Live road data is currently unavailable. Check Umferðin and official sources before driving.</p>
           </section>
         ) : (
           <>
-            <section className={`glass card relative section-block overflow-hidden p-6 ${verdictStyle?.cardClass ?? ""}`}>
+            <section className={`motion-state-enter verdict-card-motion glass card relative section-block overflow-hidden p-6 ${verdictStyle?.cardClass ?? ""}`}>
               <div className={`topo-lines ${verdictStyle?.accentClass ?? ""}`} />
-              <div className="relative flex items-start gap-4"><div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-[21px] border ${verdictStyle?.iconClass ?? ""}`}><RoadStatusIcon level={analysis.level} /></div><div><div className="eyebrow">Official-data verdict</div><h2 className={`mt-2 text-[23px] font-semibold leading-tight tracking-[-.035em] ${verdictStyle?.headingClass ?? ""}`}>{analysis.title}</h2></div></div>
+              <div className="relative flex items-start gap-4"><div data-verdict-icon className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-[21px] border ${verdictStyle?.iconClass ?? ""}`}><RoadStatusIcon level={analysis.level} /></div><div><div className="eyebrow">Official-data verdict</div><h2 className={`mt-2 text-[23px] font-semibold leading-tight tracking-[-.035em] ${verdictStyle?.headingClass ?? ""}`}>{analysis.title}</h2></div></div>
               <p className="relative mt-5 max-w-[350px] text-[13px] leading-6 text-[#a5afac]">{analysis.summary}</p>
             </section>
 
-            <section className="section-block"><div className="eyebrow section-label">What’s reported</div><div className="surface-group">
+            <section className="motion-state-enter section-block"><div className="eyebrow section-label">What’s reported</div><div className="motion-stagger surface-group">
               {analysis.warnings.length > 0 ? analysis.warnings.map((warning) => <HazardCard key={warning.id} warning={warning} />) : <div className="px-2 py-4 text-[12px] leading-5 text-[#9aa6a2]">No significant route hazards were reported by the available official sources. Conditions can change.</div>}
             </div></section>
 
-            <section className="surface-panel section-block flex items-center gap-3 border-[#34d399]/10 bg-[#34d399]/[0.035] p-4"><span className="breathing h-2 w-2 shrink-0 rounded-full bg-[#34d399]" /><div><div className="text-[10px] uppercase tracking-[.14em] text-[#70cba7]">Source freshness</div><div className="mt-1 text-[12px] text-[#a8b2af]">{formatRoadDataFreshness(result)}</div>{result.sources.roadDataStale && <div className="mt-1 text-[10px] text-[#d48c6b]">Road data may be stale. Confirm with official sources.</div>}</div></section>
+            <section className="motion-state-enter surface-panel section-block flex items-center gap-3 border-[#34d399]/10 bg-[#34d399]/[0.035] p-4"><span className="breathing h-2 w-2 shrink-0 rounded-full bg-[#34d399]" /><div><div className="text-[10px] uppercase tracking-[.14em] text-[#70cba7]">Source freshness</div><div className="mt-1 text-[12px] text-[#a8b2af]">{formatRoadDataFreshness(result)}</div>{result.sources.roadDataStale && <div className="mt-1 text-[10px] text-[#d48c6b]">Road data may be stale. Confirm with official sources.</div>}</div></section>
             {unavailableIrcaInputs(result).length > 0 && <div className="section-block px-1 text-[11px] leading-5 text-[#d9a184]">Partial official data: {unavailableIrcaInputs(result).join(", ")} unavailable. Related hazards may be omitted.</div>}
             {!result.sources.imo.available && <div className="section-block px-1 text-[11px] leading-5 text-[#8e9b98]">Weather warning data temporarily unavailable.</div>}
             {process.env.NODE_ENV === "development" && result.debug && <WhyResult analysis={analysis} records={result.debug.matchedRecords} />}
@@ -162,11 +162,11 @@ function AnalysisLoading() {
     const timers = [900, 2_100, 3_400].map((delay, index) => window.setTimeout(() => setStage(index + 1), delay));
     return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, []);
-  return <section className="glass card section-block flex min-h-52 items-center justify-center p-6 text-center"><div><span className="breathing mx-auto block h-2 w-2 rounded-full bg-[#d48c6b]" /><h2 className="mt-4 text-[18px] font-semibold">{LOADING_STAGES[stage]}</h2><p className="mt-2 text-[12px] text-[#8e9b98]">Road and weather checks run together</p></div></section>;
+  return <section className="motion-state-enter glass card section-block flex min-h-52 items-center justify-center p-6 text-center"><div><span className="breathing mx-auto block h-2 w-2 rounded-full bg-[#d48c6b]" /><h2 key={LOADING_STAGES[stage]} className="motion-crossfade mt-4 text-[18px] font-semibold">{LOADING_STAGES[stage]}</h2><p className="mt-2 text-[12px] text-[#8e9b98]">Road and weather checks run together</p></div></section>;
 }
 
 function CheckLoading() {
-  return <main className="page-shell"><div className="glass h-11 w-11 animate-pulse rounded-[17px]" /><div className="mt-9 h-4 w-28 animate-pulse rounded-full bg-white/[.06]" /><div className="mt-3 h-10 w-56 animate-pulse rounded-2xl bg-white/[.07]" /><div className="glass card mt-7 h-52 animate-pulse" /></main>;
+  return <main className="page-shell"><div className="motion-skeleton glass h-11 w-11 rounded-[17px]" /><div className="motion-skeleton mt-9 h-4 w-28 rounded-full bg-white/[.06]" /><div className="motion-skeleton mt-3 h-10 w-56 rounded-2xl bg-white/[.07]" /><div className="motion-skeleton glass card mt-7 h-52" /></main>;
 }
 
 function HazardCard({ warning }: { warning: RouteWarning }) {

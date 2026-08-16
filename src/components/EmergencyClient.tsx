@@ -146,7 +146,7 @@ export default function EmergencyClient() {
         <a
           href={EMERGENCY_TELEPHONE_HREF}
           data-testid="emergency-call"
-          className="section-block flex min-h-[116px] w-full items-center gap-4 rounded-[28px] border border-[#ef8e76]/35 bg-[linear-gradient(135deg,rgba(122,59,46,.9),rgba(83,39,33,.94))] p-5 shadow-[0_22px_55px_rgba(84,28,22,.32),inset_0_1px_0_rgba(255,255,255,.13)] outline-none focus-visible:ring-4 focus-visible:ring-[#ef8e76]/35"
+          className="motion-press section-block flex min-h-[116px] w-full items-center gap-4 rounded-[28px] border border-[#ef8e76]/35 bg-[linear-gradient(135deg,rgba(122,59,46,.9),rgba(83,39,33,.94))] p-5 shadow-[0_22px_55px_rgba(84,28,22,.32),inset_0_1px_0_rgba(255,255,255,.13)] outline-none focus-visible:ring-4 focus-visible:ring-[#ef8e76]/35"
           aria-label="Call 112 emergency services"
         >
           <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[22px] bg-white/[.1] text-[#fff4ed]"><Phone size={29} strokeWidth={2.2} /></span>
@@ -158,25 +158,25 @@ export default function EmergencyClient() {
           <div className="mb-3 flex items-end justify-between"><div><div className="eyebrow">Your location</div><h2 className="mt-1 text-[20px] font-semibold">Coordinates for help</h2></div>{location ? <span className="text-[10px] text-[#75dfb4]">GPS found</span> : null}</div>
           <div className="glass card overflow-hidden">
             {location ? (
-              <div className="p-5">
+              <div className="motion-state-enter p-5">
                 <div className="grid gap-4 font-mono tabular-nums">
                   <CoordinateRow label="Latitude" value={formatCoordinate(location.latitude, "latitude")} />
                   <CoordinateRow label="Longitude" value={formatCoordinate(location.longitude, "longitude")} />
                 </div>
                 <div className="mt-5 flex items-center gap-2 border-t border-white/[.07] pt-4 text-[12px] text-[#aab4b1]"><LocateFixed size={17} className="text-[#69a8a3]" />Accuracy: approximately ±{Math.round(location.accuracyMeters)} metres</div>
                 <div className="mt-4 grid gap-2">
-                  <button type="button" onClick={shareLocation} className="primary-button min-h-14">Share my location <Share2 size={19} /></button>
+                  <button type="button" onClick={shareLocation} className="primary-button motion-press min-h-14">Share my location <Share2 size={19} /></button>
                   <div className="grid grid-cols-2 gap-2">
-                    <button type="button" onClick={copyCoordinates} className="glass flex min-h-14 items-center justify-center gap-2 rounded-[20px] px-3 text-[12px] font-semibold"><Copy size={17} className="text-[#69a8a3]" />Copy coordinates</button>
-                    <a href={createMapsLink(location)} target="_blank" rel="noreferrer" className="glass flex min-h-14 items-center justify-center gap-2 rounded-[20px] px-3 text-center text-[12px] font-semibold"><MapPin size={17} className="shrink-0 text-[#69a8a3]" />Open in Maps</a>
+                    <button type="button" onClick={copyCoordinates} className="glass motion-press flex min-h-14 items-center justify-center gap-2 rounded-[20px] px-3 text-[12px] font-semibold"><Copy size={17} className="text-[#69a8a3]" />Copy coordinates</button>
+                    <a href={createMapsLink(location)} target="_blank" rel="noreferrer" className="glass motion-press flex min-h-14 items-center justify-center gap-2 rounded-[20px] px-3 text-center text-[12px] font-semibold"><MapPin size={17} className="shrink-0 text-[#69a8a3]" />Open in Maps</a>
                   </div>
                 </div>
-                {actionResult ? <p className={`mt-3 text-center text-[12px] ${actionResult === "unavailable" ? "text-[#d9a184]" : "text-[#75dfb4]"}`}>{shareResultMessage(actionResult)}</p> : null}
+                {actionResult ? <p className={`motion-state-enter mt-3 text-center text-[12px] ${actionResult === "unavailable" ? "text-[#d9a184]" : "text-[#75dfb4]"}`}>{shareResultMessage(actionResult)}</p> : null}
               </div>
             ) : (
               <div className="p-5">
                 <div className="flex gap-3"><LocateFixed size={22} className="shrink-0 text-[#69a8a3]" /><p className="text-[13px] leading-6 text-[#adb6b3]">{locationStatusMessage(status)}</p></div>
-                <button type="button" onClick={requestLocation} disabled={status === "requesting"} className="primary-button mt-5 min-h-14 disabled:cursor-wait disabled:opacity-60">{status === "requesting" ? "Finding location…" : "Get current location"}<LocateFixed size={19} /></button>
+                <button type="button" onClick={requestLocation} disabled={status === "requesting"} className="primary-button motion-press mt-5 min-h-14 disabled:cursor-wait disabled:opacity-60">{status === "requesting" ? "Finding location…" : "Get current location"}<LocateFixed size={19} /></button>
               </div>
             )}
           </div>
@@ -187,19 +187,7 @@ export default function EmergencyClient() {
         <section className="section-block">
           <div className="eyebrow section-label">What to do if…</div>
           <div className="grid gap-2.5">
-            {GUIDANCE.map(({ title, icon: Icon, items, ...guidance }) => (
-              <details key={title} className="surface-panel group overflow-hidden">
-                <summary className="flex min-h-16 cursor-pointer list-none items-center gap-3 px-4 py-3 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#d48c6b]/70 [&::-webkit-details-marker]:hidden">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[15px] bg-[#7a3b2e]/14 text-[#d48c6b]"><Icon size={19} /></span>
-                  <span className="min-w-0 flex-1 text-[14px] font-semibold">{title}</span>
-                  <ChevronDown size={18} className="text-[#82908d] transition-transform group-open:rotate-180" />
-                </summary>
-                <div className="border-t border-white/[.06] px-5 pb-5 pt-4">
-                  <ul className="grid gap-3 text-[13px] leading-6 text-[#b0b9b6]">{items.map((item) => <li key={item} className="flex gap-3"><span className="mt-[9px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#d48c6b]" />{item}</li>)}</ul>
-                  {"driveCheck" in guidance ? <Link href="/check" className="mt-4 flex min-h-12 items-center justify-center gap-2 rounded-[18px] border border-[#69a8a3]/20 bg-[#2d6b6b]/15 text-[12px] font-semibold text-[#9cc7c2]">Open Drive Check <ExternalLink size={15} /></Link> : null}
-                </div>
-              </details>
-            ))}
+            {GUIDANCE.map((guidance) => <GuidanceItem key={guidance.title} guidance={guidance} />)}
           </div>
         </section>
 
@@ -208,6 +196,24 @@ export default function EmergencyClient() {
       <BottomNav />
     </>
   );
+}
+
+function GuidanceItem({ guidance }: { guidance: (typeof GUIDANCE)[number] }) {
+  const [open, setOpen] = useState(false);
+  const { title, icon: Icon, items } = guidance;
+  return <div className="surface-panel emergency-accordion overflow-hidden" data-open={open ? "true" : "false"}>
+    <button type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)} className="motion-press flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#d48c6b]/70">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[15px] bg-[#7a3b2e]/14 text-[#d48c6b]"><Icon size={19} /></span>
+      <span className="min-w-0 flex-1 text-[14px] font-semibold">{title}</span>
+      <ChevronDown size={18} className={`motion-chevron text-[#82908d] ${open ? "rotate-180" : ""}`} />
+    </button>
+    <div className="accordion-content" aria-hidden={!open} inert={!open}>
+      <div><div className="border-t border-white/[.06] px-5 pb-5 pt-4">
+        <ul className="grid gap-3 text-[13px] leading-6 text-[#b0b9b6]">{items.map((item) => <li key={item} className="flex gap-3"><span className="mt-[9px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#d48c6b]" />{item}</li>)}</ul>
+        {"driveCheck" in guidance ? <Link href="/check" className="motion-press mt-4 flex min-h-12 items-center justify-center gap-2 rounded-[18px] border border-[#69a8a3]/20 bg-[#2d6b6b]/15 text-[12px] font-semibold text-[#9cc7c2]">Open Drive Check <ExternalLink size={15} /></Link> : null}
+      </div></div>
+    </div>
+  </div>;
 }
 
 export function RentalAssistanceCard({ phoneNumber }: { phoneNumber?: string }) {

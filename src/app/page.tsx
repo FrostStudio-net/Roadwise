@@ -73,7 +73,7 @@ export default function HomePage() {
           <p className="mt-4 max-w-[340px] text-[13px] leading-6 text-[#95a19e]">Check a specific drive against current official road conditions, incidents and roadside measurements.</p>
         </section>
 
-        <section className="float-in-delay section-block grid grid-cols-3 gap-2" aria-label="Current conditions">
+        <section className="motion-stagger section-block grid grid-cols-3 gap-2" aria-label="Current conditions">
           <ConditionCard icon={<Wind size={18} strokeWidth={1.6} />} label="Nearby wind" value="Not checked" note="After route check" tone="warning" />
           <ConditionCard icon={<Navigation size={18} strokeWidth={1.6} />} label="Roads" value="Route only" tone="neutral" />
           <ConditionCard icon={<ShieldAlert size={18} strokeWidth={1.6} />} label="Advisories" value="Not checked" tone="neutral" />
@@ -82,7 +82,7 @@ export default function HomePage() {
         <section className="section-block-lg">
           <div className="mb-3 flex items-end justify-between"><div><div className="eyebrow">Plan ahead</div><h2 className="mt-1 text-lg font-semibold tracking-[-0.025em]">Where to?</h2></div><span className="text-[10px] text-[#7f8c89]">From Reykjavík</span></div>
           <DestinationAutocomplete value={destination} onValueChange={(value) => { setDestination(value); setSelectedDestination(undefined); setNavigationError(undefined); clearDestinationSelection(); }} onSelect={(place) => { setDestinationInteractionActive(false); setDestination(place.name); setSelectedDestination(place); storeDestinationSelection(place); navigateToCheck(place); }} onSubmit={checkDrive} disabled={checking} error={navigationError} onInteractionChange={setDestinationInteractionActive} />
-          <button onClick={() => router.push(`/just-drive?vehicle=${encodeURIComponent(vehicle)}`)} className="glass mt-2 flex w-full items-center gap-3 rounded-[22px] px-4 py-3.5 text-left transition hover:bg-white/[.045]">
+          <button onClick={() => router.push(`/just-drive?vehicle=${encodeURIComponent(vehicle)}`)} className="motion-press glass mt-2 flex w-full items-center gap-3 rounded-[22px] px-4 py-3.5 text-left hover:bg-white/[.045]">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] bg-[#2d6b6b]/20 text-[#69a8a3]"><Navigation size={17} /></span>
             <span className="min-w-0 flex-1"><span className="block text-[13px] font-semibold">Just Drive</span><span className="mt-0.5 block text-[10px] text-[#7f8c89]">Monitor ahead without a destination</span></span>
             <span className="text-[10px] uppercase tracking-[.12em] text-[#82908d]">Start</span>
@@ -91,7 +91,7 @@ export default function HomePage() {
 
         <section className="section-block">
           <div className="eyebrow mb-3">Useful out here</div>
-          <div className="app-launcher-grid grid auto-rows-fr grid-cols-2 gap-2.5">
+          <div className="motion-stagger app-launcher-grid grid auto-rows-fr grid-cols-2 gap-2.5">
             <QuickLink icon={<Map size={20} />} label="Road map" note="Official conditions" href="/roads" />
             <QuickLink icon={<MountainSnow size={20} />} label="F-road assistant" note="Official section status" href={`/f-roads?vehicle=${encodeURIComponent(vehicle)}`} />
             <QuickLink icon={<Fuel size={20} />} label="Fuel / EV" note="Nearby and along route" href={`/fuel?vehicle=${encodeURIComponent(vehicle)}`} />
@@ -108,7 +108,7 @@ export default function HomePage() {
 
 function QuickLink({ icon, label, note, warning, href }: { icon: React.ReactNode; label: string; note: string; warning?: boolean; href: string }) {
   return (
-    <Link href={href} className="glass card relative flex min-h-[104px] overflow-hidden p-4 text-left transition hover:-translate-y-1">
+    <Link href={href} className="motion-press glass card relative flex min-h-[104px] overflow-hidden p-4 text-left hover:-translate-y-0.5">
       <span className={`topo-lines ${warning ? "text-[#7a3b2e]" : "text-[#2d6b6b]"}`} />
       <span className="relative flex w-full flex-col justify-between"><span className={warning ? "text-[#d48c6b]" : "text-[#69a8a3]"}>{icon}</span><span><span className="block text-[13px] font-semibold">{label}</span><span className="mt-0.5 block text-[10px] text-[#7f8c89]">{note}</span></span></span>
     </Link>

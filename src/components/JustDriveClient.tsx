@@ -141,7 +141,7 @@ export default function JustDriveClient({ initialVehicle }: { initialVehicle: Ve
         <section className="section-block-lg text-center">
           <div className="eyebrow">Just Drive</div>
           <h1 className="mt-3 text-[34px] font-semibold leading-[1.08] tracking-[-0.052em]">
-            {started ? (monitor?.headingReliable === false ? "Monitoring nearby" : "Monitoring ahead") : "Roadwise will monitor the road ahead."}
+            <span key={`${started}-${monitor?.headingReliable}`} className="motion-crossfade inline-block">{started ? (monitor?.headingReliable === false ? "Monitoring nearby" : "Monitoring ahead") : "Roadwise will monitor the road ahead."}</span>
           </h1>
           <p className="mx-auto mt-4 max-w-[350px] text-[13px] leading-6 text-[#95a19e]">
             {started
@@ -151,7 +151,7 @@ export default function JustDriveClient({ initialVehicle }: { initialVehicle: Ve
           <div className="mx-auto mt-7 h-px w-[72%] bg-gradient-to-r from-transparent via-[#69a8a3]/40 to-transparent" />
           <div className="mt-5 text-[10px] uppercase tracking-[.13em] text-[#7d8a87]">GPS speed</div>
           <div className="mt-1 text-[58px] font-light tracking-[-.06em]">
-            {accurateLocation?.speedKmh !== undefined ? Math.round(accurateLocation.speedKmh) : "--"}
+            <span key={accurateLocation?.speedKmh !== undefined ? Math.round(accurateLocation.speedKmh) : "unknown"} className="motion-value tabular-nums">{accurateLocation?.speedKmh !== undefined ? Math.round(accurateLocation.speedKmh) : "--"}</span>
             <span className="ml-2 text-[12px] tracking-normal text-[#7d8a87]">km/h</span>
           </div>
         </section>
@@ -174,11 +174,11 @@ export default function JustDriveClient({ initialVehicle }: { initialVehicle: Ve
             </>
           ) : (
             <>
-              <button onClick={() => setMuted((value) => !value)} className="glass card flex w-full items-center justify-center gap-2 py-4 text-[12px]">
-                {muted ? <VolumeX size={17} className="text-[#d48c6b]" /> : <Volume2 size={17} className="text-[#69a8a3]" />}
+              <button onClick={() => setMuted((value) => !value)} className="motion-press glass card flex w-full items-center justify-center gap-2 py-4 text-[12px]">
+                <span key={String(muted)} className="motion-crossfade">{muted ? <VolumeX size={17} className="text-[#d48c6b]" /> : <Volume2 size={17} className="text-[#69a8a3]" />}</span>
                 {muted ? "Unmute" : "Mute"}
               </button>
-              <button onClick={end} className="glass flex w-full items-center justify-center gap-2 rounded-[22px] py-4 text-[12px] text-[#d8b09d]">
+              <button onClick={end} className="motion-press glass flex w-full items-center justify-center gap-2 rounded-[22px] py-4 text-[12px] text-[#d8b09d]">
                 <X size={16} />End Just Drive
               </button>
             </>
@@ -247,10 +247,12 @@ function MonitorCard({ started, status, accuracyMeters, checking, monitor, monit
     detail = "Checking cached official road data.";
   }
 
+  const stateKey = primary?.id ?? `${started}-${status}-${checking}-${monitorError ?? "ok"}`;
+  const critical = primary?.severity === "closed" || primary?.severity === "difficult";
   return (
-    <section className="glass card section-block-lg relative overflow-hidden border-[#7a3b2e]/25" aria-live="polite">
+    <section className={`glass card section-block-lg relative overflow-hidden border-[#7a3b2e]/25 ${critical ? "motion-critical-once" : ""}`} aria-live="polite">
       <div className="topo-lines text-[#7a3b2e]" />
-      <div className="relative flex items-start gap-4 p-5">
+      <div key={stateKey} className="motion-crossfade relative flex items-start gap-4 p-5">
         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] bg-[#7a3b2e]/20 text-[#d48c6b]">{icon}</div>
         <div className="min-w-0 flex-1">
           <div className="eyebrow">{monitor?.headingReliable === false ? "Nearby monitor" : "Forward monitor"}</div>

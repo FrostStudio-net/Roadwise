@@ -120,6 +120,7 @@ export default function DestinationAutocomplete({ value, onValueChange, onSelect
   }
 
   const visibleError = selectionError ?? error;
+  const hasSuggestionContent = suggestions.length > 0 || unavailable;
   return (
     <div className="relative z-[60]">
       <div className="roadwise-focus-shell glass card flex items-center gap-3 p-2.5 pl-4 transition-[border-color,background-color,box-shadow] duration-200">
@@ -164,12 +165,12 @@ export default function DestinationAutocomplete({ value, onValueChange, onSelect
           className="destination-input roadwise-focus-scroll min-w-0 flex-1 border-0 bg-transparent py-3 text-[14px] outline-none ring-0 placeholder:text-[#65736f] focus:border-transparent focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
         />
         {loading ? <LoaderCircle size={18} className="animate-spin text-[#69a8a3]" aria-hidden="true" /> : null}
-        <button type="button" onClick={onSubmit} disabled={disabled} aria-label="Check this drive" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[17px] bg-[#d48c6b] text-[#21130e] shadow-[0_8px_22px_rgba(212,140,107,.2)] transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-0 disabled:cursor-wait disabled:opacity-60 disabled:hover:translate-y-0"><ArrowUpRight size={19} /></button>
+        <button type="button" onClick={onSubmit} disabled={disabled} aria-label="Check this drive" className="motion-press flex h-11 w-11 shrink-0 items-center justify-center rounded-[17px] bg-[#d48c6b] text-[#21130e] shadow-[0_8px_22px_rgba(212,140,107,.2)] hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-0 disabled:cursor-wait disabled:opacity-60 disabled:hover:translate-y-0"><ArrowUpRight size={19} /></button>
       </div>
-      {open && (suggestions.length > 0 || unavailable) ? (
-        <div id="destination-suggestions" role="listbox" aria-label="Destination suggestions" className="destination-suggestions glass absolute z-[70] mt-2 w-full overflow-y-auto overscroll-contain rounded-[22px] p-2">
+      {hasSuggestionContent ? (
+        <div id="destination-suggestions" role="listbox" aria-label="Destination suggestions" aria-hidden={!open} inert={!open || undefined} data-state={open ? "open" : "closed"} className="autocomplete-panel destination-suggestions glass absolute z-[70] mt-2 w-full overflow-y-auto overscroll-contain rounded-[22px] p-2">
           {suggestions.map((item, index) => (
-            <button id={`destination-suggestion-${index}`} key={item.mapboxId} type="button" role="option" aria-selected={activeIndex === index} disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={() => void choose(item)} className={`flex w-full items-center gap-3 rounded-[16px] px-3 py-3 text-left transition disabled:cursor-wait disabled:opacity-60 ${activeIndex === index ? "bg-white/[.07]" : "hover:bg-white/[.045]"}`}>
+            <button id={`destination-suggestion-${index}`} key={item.mapboxId} type="button" role="option" aria-selected={activeIndex === index} disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={() => void choose(item)} className={`motion-press flex w-full items-center gap-3 rounded-[16px] px-3 py-3 text-left disabled:cursor-wait disabled:opacity-60 ${activeIndex === index ? "bg-white/[.07]" : "hover:bg-white/[.045]"}`}>
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] bg-[#2d6b6b]/20 text-[#69a8a3]">{suggestionIcon(item.featureType)}</span>
               <span className="min-w-0"><span className="block truncate text-[13px] font-medium">{item.name}</span><span className="mt-0.5 block truncate text-[10px] text-[#82908d]">{item.context || "Iceland"}</span></span>
             </button>

@@ -18,7 +18,7 @@ export default function AppHeader({
 
   return (
     <header className="app-header">
-      <button type="button" onClick={onBack ?? (() => router.back())} aria-label={`Back from ${title}`} className="app-header-button glass">
+      <button type="button" onClick={onBack ?? (() => router.back())} aria-label={`Back from ${title}`} className="app-header-button motion-press glass">
         <ChevronLeft size={21} />
       </button>
       <div className="min-w-0 flex-1">

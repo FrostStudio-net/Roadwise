@@ -35,6 +35,13 @@
   --warm-light: #e8c4b0;
   --warning: #7a3b2e;
   --good: #34d399;
+  --motion-fast: 140ms;
+  --motion-normal: 200ms;
+  --motion-slow: 280ms;
+  --motion-stagger: 40ms;
+  --ease-roadwise-out: cubic-bezier(0.22, 0.75, 0.24, 1);
+  --ease-roadwise-in: cubic-bezier(0.55, 0, 0.78, 0.25);
+  --ease-roadwise-standard: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 * { box-sizing: border-box; }
@@ -111,6 +118,7 @@ button:focus-visible, a:focus-visible {
   max-width: var(--app-width);
   margin: 0 auto;
   padding: calc(18px + env(safe-area-inset-top, 0px)) var(--app-gutter) 0;
+  animation: roadwise-page-enter var(--motion-normal) var(--ease-roadwise-out) both;
 }
 
 .app-header {
@@ -138,7 +146,7 @@ button:focus-visible, a:focus-visible {
     calc(100% - (var(--app-gutter) * 2)),
     calc(var(--app-width) - (var(--app-gutter) * 2))
   );
-  transition: opacity 180ms ease, transform 220ms ease;
+  transition: opacity var(--motion-fast) var(--ease-roadwise-in), transform var(--motion-normal) var(--ease-roadwise-standard);
 }
 
 .bottom-nav[data-interaction-hidden="true"] {
@@ -159,6 +167,109 @@ button:focus-visible, a:focus-visible {
   -webkit-backdrop-filter: blur(24px) saturate(1.4);
   backdrop-filter: blur(24px) saturate(1.4);
 }
+
+.motion-press {
+  transition: transform var(--motion-fast) var(--ease-roadwise-out), border-color var(--motion-normal) var(--ease-roadwise-standard), background-color var(--motion-normal) var(--ease-roadwise-standard), color var(--motion-normal) var(--ease-roadwise-standard), box-shadow var(--motion-normal) var(--ease-roadwise-standard);
+}
+
+.motion-press:active { transform: scale(0.98); }
+
+.motion-stagger > * {
+  animation: roadwise-item-enter var(--motion-normal) var(--ease-roadwise-out) both;
+}
+.motion-stagger > :nth-child(2) { animation-delay: calc(var(--motion-stagger) * 1); }
+.motion-stagger > :nth-child(3) { animation-delay: calc(var(--motion-stagger) * 2); }
+.motion-stagger > :nth-child(4) { animation-delay: calc(var(--motion-stagger) * 3); }
+.motion-stagger > :nth-child(5) { animation-delay: calc(var(--motion-stagger) * 4); }
+.motion-stagger > :nth-child(6) { animation-delay: calc(var(--motion-stagger) * 5); }
+
+.motion-state-enter,
+.motion-crossfade {
+  animation: roadwise-state-enter var(--motion-normal) var(--ease-roadwise-out) both;
+}
+
+.motion-value {
+  display: inline-block;
+  min-width: 1.5ch;
+  animation: roadwise-value-change var(--motion-fast) var(--ease-roadwise-out) both;
+}
+
+.motion-critical-once::after {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  content: "";
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgba(239, 142, 118, 0.26);
+  animation: roadwise-critical-once var(--motion-slow) var(--ease-roadwise-out) both;
+}
+
+.motion-chip {
+  transition: color var(--motion-fast) var(--ease-roadwise-standard), border-color var(--motion-fast) var(--ease-roadwise-standard), background-color var(--motion-fast) var(--ease-roadwise-standard), transform var(--motion-fast) var(--ease-roadwise-out);
+}
+.motion-chip:active { transform: scale(0.97); }
+
+.motion-chevron { transition: transform var(--motion-normal) var(--ease-roadwise-standard); }
+
+.motion-popover {
+  transform-origin: top center;
+  animation: roadwise-popover-in var(--motion-normal) var(--ease-roadwise-out) both;
+}
+.motion-popover[data-placement="up"] { transform-origin: bottom center; }
+.motion-popover[data-placement="sheet"] { transform-origin: bottom center; }
+.motion-popover[data-state="closed"] { animation: roadwise-popover-out var(--motion-fast) var(--ease-roadwise-in) both; pointer-events: none; }
+
+.autocomplete-panel {
+  transform-origin: top center;
+  transition: opacity var(--motion-fast) var(--ease-roadwise-standard), transform var(--motion-fast) var(--ease-roadwise-standard), visibility 0s linear 0s;
+}
+.autocomplete-panel[data-state="closed"] {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-5px) scale(0.99);
+  transition-delay: 0s, 0s, var(--motion-fast);
+}
+
+.motion-backdrop { animation: roadwise-backdrop-in var(--motion-normal) var(--ease-roadwise-out) both; }
+.motion-backdrop[data-state="closed"] { animation: roadwise-backdrop-out var(--motion-fast) var(--ease-roadwise-in) both; pointer-events: none; }
+.motion-sheet { animation: roadwise-sheet-in 230ms var(--ease-roadwise-out) both; }
+.motion-sheet[data-state="closed"] { animation: roadwise-sheet-out 180ms var(--ease-roadwise-in) both; pointer-events: none; }
+.motion-sheet-centered { animation-name: roadwise-sheet-centered-in; }
+.motion-sheet-centered[data-state="closed"] { animation-name: roadwise-sheet-centered-out; }
+.motion-fullscreen { animation: roadwise-state-enter var(--motion-normal) var(--ease-roadwise-out) both; }
+.motion-fullscreen[data-state="closed"] { animation: roadwise-backdrop-out var(--motion-fast) var(--ease-roadwise-in) both; pointer-events: none; }
+
+.verdict-card-motion,
+.verdict-card-motion .topo-lines,
+.verdict-card-motion h2,
+.verdict-card-motion [data-verdict-icon] {
+  transition: color var(--motion-normal) var(--ease-roadwise-standard), border-color var(--motion-normal) var(--ease-roadwise-standard), background var(--motion-normal) var(--ease-roadwise-standard), box-shadow var(--motion-normal) var(--ease-roadwise-standard);
+}
+
+.motion-skeleton {
+  position: relative;
+  overflow: hidden;
+}
+.motion-skeleton::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 20%, rgba(255,255,255,.045) 46%, transparent 72%);
+  transform: translateX(-100%);
+  animation: roadwise-shimmer 2s ease-in-out infinite;
+}
+
+.emergency-accordion > .accordion-content {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows var(--motion-normal) var(--ease-roadwise-out), opacity var(--motion-fast) var(--ease-roadwise-standard);
+}
+.emergency-accordion[data-open="true"] > .accordion-content { grid-template-rows: 1fr; opacity: 1; }
+.emergency-accordion > .accordion-content > div { min-height: 0; overflow: hidden; }
 
 .verdict-card-normal {
   border-color: rgba(52, 211, 153, 0.15);
@@ -292,26 +403,81 @@ button:focus-visible, a:focus-visible {
   font-weight: 700;
   background: linear-gradient(135deg, #387a77, #285f60);
   box-shadow: 0 12px 32px rgba(45, 107, 107, 0.28), inset 0 1px 0 rgba(255,255,255,.16);
-  transition: transform .2s ease, box-shadow .2s ease;
+  transition: transform var(--motion-fast) var(--ease-roadwise-out), box-shadow var(--motion-normal) var(--ease-roadwise-standard);
 }
 .primary-button:hover { transform: translateY(-2px); box-shadow: 0 16px 38px rgba(45,107,107,.38); }
 .primary-button:active { transform: scale(.985); }
 
-.breathing { animation: breathe 3.2s ease-in-out infinite; }
-.float-in { animation: float-in .7s cubic-bezier(.2,.8,.2,1) both; }
-.float-in-delay { animation: float-in .7s .12s cubic-bezier(.2,.8,.2,1) both; }
+.breathing { animation: breathe 4s ease-in-out infinite; }
+.float-in { animation: roadwise-item-enter var(--motion-slow) var(--ease-roadwise-out) both; }
+.float-in-delay { animation: roadwise-item-enter var(--motion-slow) var(--motion-stagger) var(--ease-roadwise-out) both; }
 
 @keyframes breathe {
   0%, 100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, .05), 0 0 22px rgba(52,211,153,.12); }
   50% { box-shadow: 0 0 0 7px rgba(52, 211, 153, .02), 0 0 34px rgba(52,211,153,.22); }
 }
-@keyframes float-in {
-  from { opacity: 0; transform: translateY(10px); }
+@keyframes roadwise-page-enter {
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
+}
+@keyframes roadwise-item-enter {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes roadwise-state-enter {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes roadwise-value-change {
+  from { opacity: .55; }
+  to { opacity: 1; }
+}
+@keyframes roadwise-critical-once {
+  0%, 100% { opacity: 0; }
+  45% { opacity: 1; }
+}
+@keyframes roadwise-popover-in {
+  from { opacity: 0; transform: translateY(-5px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes roadwise-popover-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(-3px) scale(.99); }
+}
+@keyframes roadwise-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes roadwise-backdrop-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes roadwise-sheet-in {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes roadwise-sheet-out {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(12px); }
+}
+@keyframes roadwise-sheet-centered-in {
+  from { opacity: 0; transform: translate(-50%, 18px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+@keyframes roadwise-sheet-centered-out {
+  from { opacity: 1; transform: translate(-50%, 0); }
+  to { opacity: 0; transform: translate(-50%, 12px); }
+}
+@keyframes roadwise-shimmer {
+  0%, 25% { transform: translateX(-100%); }
+  75%, 100% { transform: translateX(100%); }
 }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  .page-shell,
+  .motion-stagger > *,
+  .motion-state-enter,
+  .motion-crossfade,
+  .motion-popover,
+  .motion-sheet,
+  .motion-sheet-centered,
+  .motion-fullscreen { transform: none !important; }
+  .motion-sheet-centered { transform: translateX(-50%) !important; }
 }
 
 @media (min-width: 520px) {

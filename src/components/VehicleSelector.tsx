@@ -12,6 +12,7 @@ import {
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { useMotionPresence } from "@/hooks/use-motion-presence";
 import type { VehicleType } from "@/types/analysis";
 
 type Props = { vehicle: VehicleType; onChange?: (vehicle: VehicleType) => void };
@@ -39,6 +40,7 @@ export default function VehicleSelector({ vehicle, onChange }: Props) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(() => selectedIndex(vehicle));
   const [placement, setPlacement] = useState<MenuPlacement>();
+  const menuPresence = useMotionPresence(open ? true : undefined, 140);
 
   useEffect(() => {
     if (!open) return;
@@ -146,7 +148,7 @@ export default function VehicleSelector({ vehicle, onChange }: Props) {
             setActiveIndex(selectedIndex(vehicle));
           }}
           onKeyDown={handleKeyDown}
-          className="flex min-h-[72px] w-full items-center gap-3 rounded-[26px] p-4 text-left outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
+          className="motion-press flex min-h-[72px] w-full items-center gap-3 rounded-[26px] p-4 text-left outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
         >
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#d48c6b]/10 text-[#d48c6b]">
             <SelectedIcon size={19} strokeWidth={1.7} />
@@ -158,20 +160,21 @@ export default function VehicleSelector({ vehicle, onChange }: Props) {
           <ChevronDown
             size={16}
             aria-hidden="true"
-            className={`shrink-0 text-[#8e9b98] transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+            className={`motion-chevron shrink-0 text-[#8e9b98] ${open ? "rotate-180" : ""}`}
           />
         </button>
       </div>
 
-      {open && placement ? createPortal(
+      {menuPresence.value && placement ? createPortal(
         <div
           ref={menuRef}
           id={listboxId}
           role="listbox"
           aria-label="Choose your vehicle"
           data-placement={placement.mode}
+          data-state={menuPresence.open ? "open" : "closed"}
           style={{ top: placement.top, left: placement.left, width: placement.width, maxHeight: placement.maxHeight }}
-          className={`vehicle-options glass fixed z-[90] overflow-y-auto overscroll-contain border-white/[.11] bg-[#111a1a]/[.98] p-2 shadow-[0_24px_65px_rgba(0,0,0,.56),inset_0_1px_0_rgba(255,255,255,.06)] ${placement.mode === "sheet" ? "rounded-[26px] pb-[max(8px,env(safe-area-inset-bottom,0px))]" : "rounded-[24px]"}`}
+          className={`motion-popover vehicle-options glass fixed z-[90] overflow-y-auto overscroll-contain border-white/[.11] bg-[#111a1a]/[.98] p-2 shadow-[0_24px_65px_rgba(0,0,0,.56),inset_0_1px_0_rgba(255,255,255,.06)] ${placement.mode === "sheet" ? "rounded-[26px] pb-[max(8px,env(safe-area-inset-bottom,0px))]" : "rounded-[24px]"}`}
         >
           {vehicles.map(({ label, icon: Icon }, index) => {
             const selected = label === vehicle;
@@ -185,7 +188,7 @@ export default function VehicleSelector({ vehicle, onChange }: Props) {
                 aria-selected={selected}
                 onPointerMove={() => setActiveIndex(index)}
                 onClick={() => choose(label)}
-                className={`flex min-h-13 w-full items-center gap-3 rounded-[17px] px-3 py-2.5 text-left outline-none transition-[background-color,color] focus:outline-none ${
+                className={`motion-press flex min-h-13 w-full items-center gap-3 rounded-[17px] px-3 py-2.5 text-left outline-none transition-[background-color,color] focus:outline-none ${
                   selected
                     ? "bg-[#2d6b6b]/25 text-[#f5f1eb]"
                     : active
