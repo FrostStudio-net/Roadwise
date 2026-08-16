@@ -1,11 +1,13 @@
 "use client";
 
-import { ArrowUpRight, CloudOff, Map, Navigation } from "lucide-react";
+import { ArrowUpRight, CarFront, CloudOff, Map, Navigation } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
 import BottomNav from "@/components/BottomNav";
 import AppHeader from "@/components/AppHeader";
+import ChargingOutlook from "@/components/ChargingOutlook";
 import DataAttribution from "@/components/DataAttribution";
 import RoadStatusIcon from "@/components/RoadStatusIcon";
 import VehicleSelector from "@/components/VehicleSelector";
@@ -14,6 +16,11 @@ import { ROAD_STATUS_STYLES } from "@/lib/road-status-style";
 import { clearRouteAnalysis, storeRouteAnalysis } from "@/lib/route-analysis-storage";
 import { VEHICLE_TYPES } from "@/types/analysis";
 import type { AnalyseRouteResponse, AnalysisDebugRecord, RouteWarning, VehicleType } from "@/types/analysis";
+
+const DriveCheckRouteMap = dynamic(() => import("@/components/DriveCheckRouteMap"), {
+  ssr: false,
+  loading: () => <section className="section-block"><div className="motion-skeleton map-skeleton h-[clamp(230px,32dvh,290px)] rounded-[26px] border border-white/[.08]" aria-label="Loading route map" /></section>,
+});
 
 type AnalyseErrorResponse = {
   error?: { message?: string };
@@ -130,6 +137,10 @@ function CheckContent() {
               <p className="relative mt-5 max-w-[350px] text-[13px] leading-6 text-[#a5afac]">{analysis.summary}</p>
             </section>
 
+            <DriveCheckRouteMap route={route!.geometry} warnings={analysis.warnings} originName={route!.origin.name} destinationName={route!.destination.name} />
+
+            {vehicle === "Electric vehicle" ? <ChargingOutlook route={route!.geometry} distanceKm={route!.distanceKm} /> : null}
+
             <section className="motion-state-enter section-block"><div className="eyebrow section-label">What’s reported</div><div className="motion-stagger surface-group">
               {analysis.warnings.length > 0 ? analysis.warnings.map((warning) => <HazardCard key={warning.id} warning={warning} />) : <div className="px-2 py-4 text-[12px] leading-5 text-[#9aa6a2]">No significant route hazards were reported by the available official sources. Conditions can change.</div>}
             </div></section>
@@ -162,7 +173,7 @@ function AnalysisLoading() {
     const timers = [900, 2_100, 3_400].map((delay, index) => window.setTimeout(() => setStage(index + 1), delay));
     return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, []);
-  return <section className="motion-state-enter glass card section-block flex min-h-52 items-center justify-center p-6 text-center"><div><span className="breathing mx-auto block h-2 w-2 rounded-full bg-[#d48c6b]" /><h2 key={LOADING_STAGES[stage]} className="motion-crossfade mt-4 text-[18px] font-semibold">{LOADING_STAGES[stage]}</h2><p className="mt-2 text-[12px] text-[#8e9b98]">Road and weather checks run together</p></div></section>;
+  return <section className="motion-state-enter glass card section-block flex min-h-52 items-center justify-center p-6 text-center" aria-live="polite" aria-busy="true"><div><div className="route-analysis-loader mx-auto" aria-hidden="true"><span className="route-analysis-line" /><span className="route-analysis-trail" /><span className="route-analysis-car"><CarFront size={22} strokeWidth={1.8} /></span></div><h2 key={LOADING_STAGES[stage]} className="motion-crossfade mt-4 text-[18px] font-semibold">{LOADING_STAGES[stage]}</h2><p className="mt-2 text-[12px] text-[#8e9b98]">Road and weather checks run together</p></div></section>;
 }
 
 function CheckLoading() {

@@ -272,6 +272,52 @@ button:focus-visible, a:focus-visible {
   animation: roadwise-shimmer 2s ease-in-out infinite;
 }
 
+.route-analysis-loader {
+  position: relative;
+  width: 190px;
+  height: 42px;
+}
+
+.route-analysis-line,
+.route-analysis-trail {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 28px;
+  height: 1px;
+  border-radius: 999px;
+}
+
+.route-analysis-line {
+  background: linear-gradient(90deg, rgba(105, 168, 163, .08), rgba(105, 168, 163, .34), rgba(105, 168, 163, .08));
+}
+
+.route-analysis-trail {
+  right: auto;
+  width: 78px;
+  transform-origin: left center;
+  background: linear-gradient(90deg, transparent, rgba(212, 140, 107, .48));
+  animation: roadwise-route-trail 2.6s var(--ease-roadwise-standard) infinite;
+}
+
+.route-analysis-car {
+  position: absolute;
+  left: 4px;
+  top: 6px;
+  display: flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(105, 168, 163, .18);
+  border-radius: 12px;
+  color: #b9d4d0;
+  background: #152323;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, .28);
+  animation: roadwise-route-car 2.6s var(--ease-roadwise-standard) infinite;
+  will-change: transform, opacity;
+}
+
 .emergency-accordion > .accordion-content {
   display: grid;
   grid-template-rows: 0fr;
@@ -367,6 +413,36 @@ button:focus-visible, a:focus-visible {
   font: inherit;
 }
 .roadwise-map-canvas .mapboxgl-canvas { display: block; }
+.drive-check-map .mapboxgl-ctrl-attrib { max-width: 72%; }
+.route-map-endpoint {
+  width: 14px;
+  height: 14px;
+  border: 3px solid #d8e6e3;
+  border-radius: 999px;
+  background: #2d6b6b;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, .48);
+}
+.route-map-endpoint-end { background: #d48c6b; }
+.route-map-warning {
+  display: flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid rgba(245, 241, 235, .78);
+  border-radius: 11px;
+  color: #101818;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .5);
+  transition: transform var(--motion-fast) var(--ease-roadwise-out), box-shadow var(--motion-fast) var(--ease-roadwise-out);
+}
+.route-map-warning:hover,
+.route-map-warning:focus-visible { transform: scale(1.08); box-shadow: 0 8px 22px rgba(0, 0, 0, .58); }
+.route-map-warning-caution { background: #d48c6b; }
+.route-map-warning-difficult { background: #c87354; }
+.route-map-warning-closed { background: #ef8e76; }
 .mapboxgl-ctrl-attrib { border-radius: 10px 0 0; background: rgba(10, 15, 15, .78) !important; color: #9ca7a4; }
 .mapboxgl-ctrl-attrib a { color: #b9c3c0; }
 .eyebrow {
@@ -480,6 +556,18 @@ button:focus-visible, a:focus-visible {
   0%, 25% { transform: translateX(-100%); }
   75%, 100% { transform: translateX(100%); }
 }
+@keyframes roadwise-route-car {
+  0% { opacity: 0; transform: translateX(0); }
+  10% { opacity: 1; }
+  82% { opacity: 1; transform: translateX(150px); }
+  100% { opacity: 0; transform: translateX(150px); }
+}
+@keyframes roadwise-route-trail {
+  0% { opacity: 0; transform: scaleX(.15); }
+  16% { opacity: .65; }
+  72% { opacity: .55; transform: translateX(82px) scaleX(1); }
+  100% { opacity: 0; transform: translateX(82px) scaleX(.65); }
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
@@ -492,6 +580,8 @@ button:focus-visible, a:focus-visible {
   .motion-sheet-centered,
   .motion-fullscreen { transform: none !important; }
   .motion-sheet-centered { transform: translateX(-50%) !important; }
+  .route-analysis-car { opacity: 1 !important; transform: translateX(75px) !important; }
+  .route-analysis-trail { opacity: .45 !important; transform: translateX(40px) scaleX(.7) !important; }
 }
 
 @media (min-width: 520px) {

@@ -24,7 +24,7 @@ export function publicMapboxToken(): string | undefined {
   return process.env.NEXT_PUBLIC_MAPBOX_TOKEN?.trim() || undefined;
 }
 
-export function developmentMapError(scope: "fuel" | "roads", stage: string, error?: unknown) {
+export function developmentMapError(scope: "drive-check" | "fuel" | "roads", stage: string, error?: unknown) {
   if (process.env.NODE_ENV !== "development") return;
   const detail = sanitizeMapError(error).message;
   console.warn(`[Roadwise ${scope} map] ${stage}${detail ? `: ${detail}` : ""}`);

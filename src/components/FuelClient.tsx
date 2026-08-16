@@ -21,13 +21,13 @@ type PageMode = "nearby" | "route";
 type ServiceFilter = ServicePoiType | "all";
 type DisplayPoi = ServicePoi & { distanceKm?: number; distanceAheadKm?: number; lateralDistanceKm?: number };
 
-export default function FuelClient({ initialSnapshot, initialVehicle, mapConfigured }: { initialSnapshot: ServicePoiSnapshot; initialVehicle: VehicleType; mapConfigured: boolean }) {
+export default function FuelClient({ initialSnapshot, initialVehicle, initialMode = "nearby", initialFilter, mapConfigured }: { initialSnapshot: ServicePoiSnapshot; initialVehicle: VehicleType; initialMode?: PageMode; initialFilter?: ServiceFilter; mapConfigured: boolean }) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapboxMap | undefined>(undefined);
   const userMarker = useRef<Marker | undefined>(undefined);
-  const [mode, setMode] = useState<PageMode>("nearby");
+  const [mode, setMode] = useState<PageMode>(initialMode);
   const [vehicle, setVehicle] = useState<VehicleType>(initialVehicle);
-  const [filter, setFilter] = useState<ServiceFilter>(initialVehicle === "Electric vehicle" ? "ev" : "fuel");
+  const [filter, setFilter] = useState<ServiceFilter>(initialFilter ?? (initialVehicle === "Electric vehicle" ? "ev" : "fuel"));
   const [query, setQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [location, setLocation] = useState<{ coordinates: Coordinates; accuracyMeters: number }>();
