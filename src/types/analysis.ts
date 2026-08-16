@@ -179,3 +179,10 @@ export type AnalyseRouteResponse = {
   };
   timings?: RouteAnalysisTimings;
 };
+
+export type RouteConditionsRefreshResponse = {
+  analysis: RouteAnalysis;
+  sources: Pick<AnalyseRouteResponse["sources"], "irca" | "imo" | "updatedAt" | "roadDataUpdatedAt" | "roadDataAgeMinutes" | "roadDataStale" | "staleAfterMinutes">;
+  matches: AnalyseRouteResponse["matches"];
+  refreshedAt: string;
+};

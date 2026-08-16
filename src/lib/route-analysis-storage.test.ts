@@ -8,6 +8,8 @@ import {
   clearActiveTrip,
   clearCheckedRoute,
   LEGACY_ROUTE_ANALYSIS_STORAGE_KEY,
+  parseActiveTripState,
+  persistActiveTripRefresh,
   promoteCheckedRouteToActiveTrip,
   readActiveTrip,
   readCheckedRoute,
@@ -68,8 +70,8 @@ describe("checked-route and active-trip storage", () => {
     const storage = new MemoryStorage();
     const vik = routeAnalysis();
     storeCheckedRoute(vik, now, storage);
-    expect(promoteCheckedRouteToActiveTrip(vik, now + 1_000, storage)?.route.destination.name).toBe("Vík");
-    expect(readActiveTrip(now + 2_000, storage)?.route.destination.name).toBe("Vík");
+    expect(promoteCheckedRouteToActiveTrip(vik, now + 1_000, storage, storage)?.analysis.route.destination.name).toBe("Vík");
+    expect(readActiveTrip(now + 2_000, storage)?.analysis.route.destination.name).toBe("Vík");
   });
 
   it("preserves Vík as active while Akranes is only checked, then switches on explicit promotion", () => {
@@ -77,22 +79,22 @@ describe("checked-route and active-trip storage", () => {
     const vik = routeAnalysis();
     const akranes = routeAnalysis("Akranes", [-22.07, 64.32]);
     storeCheckedRoute(vik, now, storage);
-    promoteCheckedRouteToActiveTrip(vik, now + 1_000, storage);
+    promoteCheckedRouteToActiveTrip(vik, now + 1_000, storage, storage);
     storeCheckedRoute(akranes, now + 2_000, storage);
     expect(readCheckedRoute(now + 3_000, storage)?.route.destination.name).toBe("Akranes");
-    expect(readActiveTrip(now + 3_000, storage)?.route.destination.name).toBe("Vík");
-    expect(promoteCheckedRouteToActiveTrip(akranes, now + 4_000, storage)?.route.destination.name).toBe("Akranes");
-    expect(readActiveTrip(now + 5_000, storage)?.route.destination.name).toBe("Akranes");
+    expect(readActiveTrip(now + 3_000, storage)?.analysis.route.destination.name).toBe("Vík");
+    expect(promoteCheckedRouteToActiveTrip(akranes, now + 4_000, storage, storage)?.analysis.route.destination.name).toBe("Akranes");
+    expect(readActiveTrip(now + 5_000, storage)?.analysis.route.destination.name).toBe("Akranes");
   });
 
   it("clears checked context and active trips independently", () => {
     const storage = new MemoryStorage();
     const vik = routeAnalysis();
     storeCheckedRoute(vik, now, storage);
-    promoteCheckedRouteToActiveTrip(vik, now + 1_000, storage);
+    promoteCheckedRouteToActiveTrip(vik, now + 1_000, storage, storage);
     clearCheckedRoute(storage);
     expect(readCheckedRoute(now + 2_000, storage)).toBeUndefined();
-    expect(readActiveTrip(now + 2_000, storage)?.route.destination.name).toBe("Vík");
+    expect(readActiveTrip(now + 2_000, storage)?.analysis.route.destination.name).toBe("Vík");
     storeCheckedRoute(vik, now + 3_000, storage);
     clearActiveTrip(storage);
     expect(readActiveTrip(now + 4_000, storage)).toBeUndefined();
@@ -110,7 +112,7 @@ describe("checked-route and active-trip storage", () => {
     const storage = new MemoryStorage();
     const vik = routeAnalysis();
     storeCheckedRoute(vik, now, storage);
-    promoteCheckedRouteToActiveTrip(vik, now + 1_000, storage);
+    promoteCheckedRouteToActiveTrip(vik, now + 1_000, storage, storage);
     expect(readActiveTrip(now + 1_000 + ACTIVE_TRIP_TTL_MS + 1, storage)).toBeUndefined();
     expect(storage.getItem(ACTIVE_TRIP_STORAGE_KEY)).toBeNull();
   });
@@ -128,9 +130,42 @@ describe("checked-route and active-trip storage", () => {
     const storage = new MemoryStorage();
     const vik = routeAnalysis();
     storeCheckedRoute(vik, now, storage);
-    promoteCheckedRouteToActiveTrip(vik, now + 1_000, storage);
+    promoteCheckedRouteToActiveTrip(vik, now + 1_000, storage, storage);
     const akranes = routeAnalysis("Akranes", [-22.07, 64.32]);
-    expect(promoteCheckedRouteToActiveTrip(akranes, now + 2_000, storage)).toBeUndefined();
-    expect(readActiveTrip(now + 3_000, storage)?.route.destination.name).toBe("Vík");
+    expect(promoteCheckedRouteToActiveTrip(akranes, now + 2_000, storage, storage)).toBeUndefined();
+    expect(readActiveTrip(now + 3_000, storage)?.analysis.route.destination.name).toBe("Vík");
+  });
+
+  it("persists a compact versioned active trip with route geometry and warning metadata", () => {
+    const storage = new MemoryStorage();
+    const vik = routeAnalysis();
+    vik.sources.updatedAt = "2026-08-15T11:55:00Z";
+    vik.analysis.warnings = [{ id: "incident-1", type: "roadworks", title: "Roadworks", description: "Works on Route 1", severity: "caution", source: "IRCA", distanceAheadKm: 42, roadNumber: "1" }];
+    storeCheckedRoute(vik, now, storage);
+    const active = promoteCheckedRouteToActiveTrip(vik, now + 1_000, storage, storage);
+    expect(active).toMatchObject({ version: 2, startedAt: now + 1_000, savedAt: now + 1_000, analysisUpdatedAt: now, officialDataUpdatedAt: "2026-08-15T11:55:00Z" });
+    expect(active?.analysis.route.geometry).toEqual(vik.route.geometry);
+    expect(active?.analysis.analysis.warnings[0]).toMatchObject({ id: "incident-1", distanceAheadKm: 42, severity: "caution", source: "IRCA" });
+  });
+
+  it("updates saved warnings after refresh without replacing route geometry or trip start", () => {
+    const storage = new MemoryStorage();
+    const vik = routeAnalysis();
+    storeCheckedRoute(vik, now, storage);
+    const active = promoteCheckedRouteToActiveTrip(vik, now + 1_000, storage, storage)!;
+    const refreshed = structuredClone(vik);
+    refreshed.sources.updatedAt = "2026-08-15T12:10:00Z";
+    refreshed.analysis.warnings = [{ id: "incident-new", type: "roadworks", title: "Roadworks", description: "New report", severity: "caution", source: "IRCA", distanceAheadKm: 75 }];
+    const updated = persistActiveTripRefresh(active, refreshed, now + 11 * 60_000, storage);
+    expect(updated?.startedAt).toBe(active.startedAt);
+    expect(updated?.savedAt).toBe(now + 11 * 60_000);
+    expect(updated?.analysisUpdatedAt).toBe(now + 11 * 60_000);
+    expect(updated?.analysis.route.geometry).toEqual(active.analysis.route.geometry);
+    expect(updated?.analysis.analysis.warnings.map((warning) => warning.id)).toEqual(["incident-new"]);
+  });
+
+  it("rejects corrupt or incompatible active-trip schemas", () => {
+    expect(parseActiveTripState("not-json", now)).toBeUndefined();
+    expect(parseActiveTripState(JSON.stringify({ version: 99, startedAt: now, savedAt: now, analysisUpdatedAt: now, analysis: routeAnalysis() }), now)).toBeUndefined();
   });
 });

@@ -38,8 +38,8 @@ export default function HomePage() {
       const checked = readCheckedRoute();
       const activeTrip = readActiveTrip();
       if (!active) return;
-      setRouteState({ restored: true, checked, active: activeTrip });
-      if (activeTrip ?? checked) setVehicle((activeTrip ?? checked)!.vehicle);
+      setRouteState({ restored: true, checked, active: activeTrip?.analysis });
+      if (activeTrip?.analysis ?? checked) setVehicle((activeTrip?.analysis ?? checked)!.vehicle);
     }
     queueMicrotask(restoreRoute);
     function restoreWhenVisible() {
